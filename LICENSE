@@ -1,21 +1,11 @@
-MIT License
+© 2026 Tag & Dice. All Rights Reserved.
 
-Copyright (c) 2026 Tag & Dice
+이 저장소의 코드(webapp/, render.py, build_xlsx.py)는 저작권자에게 귀속됩니다.
+사전 서면 허가 없이 복제, 재배포, 파생 저작물 제작 또는 상업적 이용을 금합니다.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+열람 및 개인적인 실행·테스트는 자유롭게 하실 수 있습니다. 재사용·인용 관련 문의는
+저장소 이슈로 남겨 주세요.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+단, 게임 규칙·설정 텍스트(spec.md, 멀티플레이_방_시스템_설계.md)는 별도로
+Creative Commons Attribution 4.0 (CC BY 4.0)로 공개되어 있습니다.
+자세한 내용은 LICENSE-CONTENT.md를 확인하세요.
