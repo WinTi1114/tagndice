@@ -23,6 +23,11 @@ cd webapp
 python test_app4.py
 ```
 
+## 라이선스
+
+- 코드(`webapp/`, `render.py`, `build_xlsx.py`): All Rights Reserved. 자세한 내용은 [LICENSE](LICENSE) 참고.
+- 게임 규칙·설정 텍스트(`spec.md`, `멀티플레이_방_시스템_설계.md`): [CC BY 4.0](LICENSE-CONTENT.md) — 출처만 표시하면 자유롭게 이용 가능합니다.
+
 ## 참고
 
 이 저장소는 핵심 산출물 위주로 정리되어 있습니다. 작업 중 생성된 스크린샷, 이전 버전 백업, 중간 산출물 등은 저장소에 포함하지 않았습니다.
