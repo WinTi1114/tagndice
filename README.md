@@ -1,6 +1,7 @@
 # 태그 앤 다이스 (Tag & Dice)
 
 순수 취미로 만드는 TRPG 룰북 프로젝트입니다.
+코드(웹앱, 스크립트)는 [MIT License](LICENSE)를, 게임 콘텐츠(룰, 설정 텍스트)는 [CC BY 4.0](LICENSE-CONTENT.md)을 따릅니다.
 
 ## 구성
 
