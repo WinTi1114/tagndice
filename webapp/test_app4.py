@@ -73,10 +73,10 @@ def main():
 
         # ---- 5. resources: hexbadge icons + box click + -/+ buttons (ReferenceError regression)
         res_rows = page.locator("#resources .res-row")
-        assert res_rows.count() == 3
-        for i in range(3):
+        assert res_rows.count() == 5, "expected 5 core resources (health/mind/fatigue + 피해+n/방어+n)"
+        for i in range(5):
             hexicon = res_rows.nth(i).locator(".hexbadge .hb-fg").inner_text()
-            assert hexicon in ("♥", "✦", "●"), f"missing resource hex icon: {hexicon!r}"
+            assert hexicon in ("♥", "✦", "●", "⚔", "🛡"), f"missing resource hex icon: {hexicon!r}"
         minus_btn = res_rows.nth(0).locator(".resource-actions button").nth(0)
         plus_btn = res_rows.nth(0).locator(".resource-actions button").nth(1)
         before = page.evaluate("() => current().health")
@@ -91,6 +91,24 @@ def main():
         box3 = res_rows.nth(0).locator(".track .box").nth(2)
         box3.click(); page.wait_for_timeout(80)
         assert page.evaluate("() => current().health") == 3, "clicking a track box should set current value directly"
+
+        # ---- 5b. 피해+n / 방어+n: fixed 3/3 max, freely player-managed like other resources
+        assert page.evaluate("() => current().dmgBonus") == 0, "피해+n should start empty"
+        assert page.evaluate("() => current().defBonus") == 0, "방어+n should start empty"
+        dmg_row = res_rows.nth(3)
+        def_row = res_rows.nth(4)
+        assert dmg_row.locator(".track .box").count() == 3, "피해+n should render exactly 3 boxes (fixed max, no locked slots)"
+        assert def_row.locator(".track .box").count() == 3, "방어+n should render exactly 3 boxes (fixed max, no locked slots)"
+        assert dmg_row.locator(".track .box.disabled").count() == 0, "피해+n has no level-up-locked boxes"
+        dmg_row.locator(".track .box").nth(1).click(); page.wait_for_timeout(80)
+        assert page.evaluate("() => current().dmgBonus") == 2, "clicking 피해+n box 2 should set value to 2"
+        dmg_row.locator(".resource-actions button").nth(1).click(); page.wait_for_timeout(80)  # +
+        dmg_row.locator(".resource-actions button").nth(1).click(); page.wait_for_timeout(80)  # + (should clamp at 3)
+        assert page.evaluate("() => current().dmgBonus") == 3, f"피해+n should clamp at max 3, got {page.evaluate('() => current().dmgBonus')}"
+        assert page.evaluate("() => current().maxDmgBonus") == 3
+        def_row.locator(".resource-actions button").nth(1).click(); page.wait_for_timeout(80)  # +
+        assert page.evaluate("() => current().defBonus") == 1, "방어+n plus button should work independently of 피해+n"
+        assert not errors, f"피해+n/방어+n interactions threw JS errors: {errors}"
 
         # ---- 6. dice roll works
         page.click("text=🎲 2d6 굴리기")
@@ -118,16 +136,15 @@ def main():
         assert page.evaluate("() => current().inventory[0]") == "낡은 지도"
         assert page.evaluate("() => current().gold") == "12"
 
-        # ---- 9. back page: info fields incl new look1/look2, backstory, nameMirror
+        # ---- 9. back page: info fields incl look1 (single 외모 특징 field), backstory, nameMirror
         page.locator("#value").fill("정의")
         page.locator("#age").fill("27")
         page.locator("#body").fill("175cm / 68kg")
-        page.locator("#look1").fill("왼쪽 뺨의 흉터")
-        page.locator("#look2").fill("은발")
+        page.locator("#look1").fill("왼쪽 뺨의 흉터, 은발")
         page.locator("#backstory").fill("긴 여정 끝에...")
         page.wait_for_timeout(100)
-        assert page.evaluate("() => current().look1") == "왼쪽 뺨의 흉터"
-        assert page.evaluate("() => current().look2") == "은발"
+        assert page.evaluate("() => current().look1") == "왼쪽 뺨의 흉터, 은발"
+        assert page.locator("#look2").count() == 0, "외모 특징 should be a single field now, not two"
         assert page.locator("#nameMirror").inner_text() == "모험가라나", "back-page name mirror not synced"
 
         # ---- 10. portrait upload -> canvas resize -> stored as data URL, then remove
@@ -231,10 +248,24 @@ def main():
         assert front_visible_print and back_visible_print, "both pages should render under print media"
         assert print_transform in ("none", "matrix(1, 0, 0, 1, 0, 0)"), f"print output must ignore any on-screen transform: {print_transform!r}"
 
+        # front/main height was deliberately raised twice:
+        #  1. +69.30px when 피해+n/방어+n were added to 핵심 자원 (2 more
+        #     res-rows in the .main right column).
+        #  2. +67.11px when the 태그 선언/컨디션/상처 rule-reference boxes
+        #     were moved from the bottom of .right to the bottom of .left,
+        #     to fill the empty space that used to sit under 침식 태그 (see
+        #     design_note_26_base.md-style screen-layout requests). Moving
+        #     them into the wider .left column shortens their own wrapped
+        #     text, but .left (table + erosion + the 3 boxes) still ends up
+        #     taller than .right (resources + judgment) used to be, so the
+        #     row grows a bit further even though the layout is now better
+        #     balanced on screen.
+        # Verified both times: only front.h and main.h moved, by the exact
+        # same delta; back/origin/column layout/cheat columns are untouched.
         PRINT_EXPECTED = {
-            "front": {"w": 793.69, "h": 1219.42},
+            "front": {"w": 793.69, "h": 1355.83},
             "back":  {"w": 793.69, "h": 1122.52},
-            "main":  {"w": 727.22, "h": 476.34},
+            "main":  {"w": 727.22, "h": 612.75},
             "origin": {"w": 727.22, "h": 67.89},
             "mainCols": "419.172px 295.188px",
             "originCols": "236.359px 236.359px 236.359px",
