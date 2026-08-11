@@ -480,6 +480,10 @@ table.stuff-table input{width:100%}
 
     <h2 class="sec sec-gap">침식 태그 <span class="cap">— 최대 3개, 레벨업 시 1개 정화 가능</span></h2>
     <div id="erosion" class="erosion"></div>
+
+    <div class="ruleref"><b>태그 선언</b> — 관련 컨디션(정신력/피로도) 1점 소모 → 판정 없이 자동 성공. 0이면 선언 불가 → 2d6 판정으로.</div>
+    <div class="ruleref"><b>컨디션</b> — 정신력: 지적 행동에 사용 · 피로도: 신체적 행동에 사용. 같은 태그도 행동 묘사에 따라 마스터가 소모할 컨디션을 판단합니다.</div>
+    <div class="ruleref"><b>상처</b> — 피해를 받으면 체력 칸에 상처를 표시(페널티 없음). 모든 칸이 상처로 가득 차면 즉시 행동불능이 됩니다.</div>
    </div>
 
    <div class="right">
@@ -497,9 +501,6 @@ table.stuff-table input{width:100%}
      <div class="p"><span class="n">5~9</span><span class="d">성공하나<br>침식·위험 발생</span></div>
      <div class="p"><span class="n">4-</span><span class="d">GM 재량<br>(대개 실패)</span></div>
     </div>
-    <div class="ruleref"><b>태그 선언</b> — 관련 컨디션(정신력/피로도) 1점 소모 → 판정 없이 자동 성공. 0이면 선언 불가 → 2d6 판정으로.</div>
-    <div class="ruleref"><b>컨디션</b> — 정신력: 지적 행동에 사용 · 피로도: 신체적 행동에 사용. 같은 태그도 행동 묘사에 따라 마스터가 소모할 컨디션을 판단합니다.</div>
-    <div class="ruleref"><b>상처</b> — 피해를 받으면 체력 칸에 상처를 표시(페널티 없음). 모든 칸이 상처로 가득 차면 즉시 행동불능이 됩니다.</div>
    </div>
   </div>
 
@@ -565,7 +566,6 @@ table.stuff-table input{width:100%}
       <div class="row"><label>나이</label><input id="age" class="uline" oninput="saveField()"></div>
       <div class="row"><label>키 / 몸무게</label><input id="body" class="uline" oninput="saveField()"></div>
       <div class="row"><label>외모 특징</label><input id="look1" class="uline" oninput="saveField()"></div>
-      <div class="row"><label>외모 특징</label><input id="look2" class="uline" oninput="saveField()"></div>
      </div>
     </div>
     <div class="sp-story">
@@ -693,8 +693,8 @@ function modalConfirm(msg){ return showModal({message:msg,type:"confirm"}); }
 function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defaultValue:def||""}); }
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
 
-const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","look2","backstory"];
-const blankPC=()=>({id:crypto.randomUUID(),name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,health:5,maxMind:3,mind:3,maxFatigue:3,fatigue:3,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",look2:"",backstory:"",portrait:""});
+const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
+const blankPC=()=>({id:crypto.randomUUID(),name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,health:5,maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
 let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:""}};
 db.activeId ||= db.pcs[0].id;
 db.gmLock = db.gmLock || {enabled:false,pin:""};
@@ -702,13 +702,16 @@ let gmUnlocked = false;
 db.pcs.forEach(p=>{
   p.maxHealth=Math.min(10,p.maxHealth||5); p.maxMind=Math.min(10,p.maxMind||3); p.maxFatigue=Math.min(10,p.maxFatigue||3);
   p.health=Math.min(p.maxHealth,p.health??p.maxHealth); p.mind=Math.min(p.maxMind,p.mind??p.maxMind); p.fatigue=Math.min(p.maxFatigue,p.fatigue??p.maxFatigue);
+  // 피해+n / 방어+n: fixed at 3 max (not level-up growable, unlike health/mind/fatigue above)
+  p.maxDmgBonus=3; p.maxDefBonus=3;
+  p.dmgBonus=Math.min(p.maxDmgBonus,p.dmgBonus??0); p.defBonus=Math.min(p.maxDefBonus,p.defBonus??0);
   p.magicUses=p.magicUses||[false,false,false];
   p.magicForm=p.magicForm||"";
   p.erosion=p.erosion||["","",""];
   p.inventory=p.inventory||Array(10).fill("");
   p.gold=p.gold??""; p.silver=p.silver??""; p.copper=p.copper??""; p.shard=p.shard??"";
   p.secret=p.secret??"";
-  p.look1=p.look1??""; p.look2=p.look2??"";
+  p.look1=p.look1??"";
   p.portrait=p.portrait||"";
   if(p.levelUpsUsed===undefined){
    // migration: infer how many level-ups were already "spent" from stat
@@ -860,17 +863,17 @@ function clearErosion(i){
 function editInventory(i,v){ current().inventory[i]=v; persistQuiet(); }
 function setMagicForm(v){ current().magicForm=v; persistQuiet(); }
 function renderResources(){
- let p=current(); let rows=[["health","체력","maxHealth","♥"],["mind","정신력","maxMind","✦"],["fatigue","피로도","maxFatigue","●"]];
- document.getElementById("resources").innerHTML=rows.map(([k,l,m,icon])=>{
+ let p=current(); let rows=[["health","체력","maxHealth","♥",10,true],["mind","정신력","maxMind","✦",10,true],["fatigue","피로도","maxFatigue","●",10,true],["dmgBonus","피해+n","maxDmgBonus","⚔",3,false],["defBonus","방어+n","maxDefBonus","🛡",3,false]];
+ document.getElementById("resources").innerHTML=rows.map(([k,l,m,icon,cap,growable])=>{
    let max=p[m]||1;
-   let boxes=Array.from({length:10},(_,i)=>{
+   let boxes=Array.from({length:cap},(_,i)=>{
      let cls=i<max?(i<p[k]?"box on":"box"):"box disabled";
      return `<span class="${cls}" title="${i<max?(i+1)+"번째 토큰": "레벨업으로 최대치 확장 후 사용 가능"}" onclick="${i<max?`setRes('${k}',${i+1})`:''}"></span>`;
    }).join("");
    return `<div class="res-row">
      <div class="rlabel">
        <span class="rmain"><span class="hexbadge sm"><span class="hb-bg"></span><span class="hb-fg">${icon}</span></span><span class="n">${l}</span></span>
-       <span class="start">${p[k]}/${max} · 레벨업 시 최대치 증가</span>
+       <span class="start">${p[k]}/${max}${growable?" · 레벨업 시 최대치 증가":""}</span>
      </div>
      <div class="track">${boxes}</div>
      <div class="resource-actions">
