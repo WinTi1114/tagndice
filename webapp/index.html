@@ -64,10 +64,11 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .party-sheet{background:var(--paper2);border:1px solid var(--line);padding:12px}
 .party-sheet h3{color:var(--red);margin:0 0 8px}
 .party-tags{display:flex;gap:5px;flex-wrap:wrap}.tagchip{padding:3px 7px;border:1px solid var(--line);border-radius:10px;font-size:11px}
-.log{max-height:280px;overflow:auto;font-size:12px;border-top:1px solid var(--line)}
-.log div{padding:6px 0;border-bottom:1px solid #c6b58e}
+.log{max-height:120px;overflow-y:auto;overflow-x:hidden;font-size:12px;border-top:1px solid var(--line);scrollbar-width:auto}
+.log div{height:24px;box-sizing:border-box;padding:4px 0;border-bottom:1px solid #c6b58e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shared-log-wrap{background:var(--paper2);border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:14px}
 .shared-log-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800;color:var(--red);font-size:14px;margin-bottom:2px}
+.shared-log-wrap .log{max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden}
 .modal-overlay{position:fixed;inset:0;background:rgba(30,20,10,.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
 .modal-box{background:var(--paper);border:2px solid #46351f;box-shadow:0 10px 40px rgba(0,0,0,.4);padding:20px;max-width:380px;width:100%}
 .modal-message{white-space:pre-line;margin-bottom:14px;line-height:1.6;font-size:14px}
@@ -737,10 +738,19 @@ function mergeRoomSnapshot(payload){
  db.pcs = allPCs;
  db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:"",ownerId:""};
  db.logs = Array.isArray(payload.meta?.logs) ? payload.meta.logs : (Array.isArray(payload.data?.logs) ? payload.data.logs : []);
+ // 중요: Firebase에서 다른 사용자의 시트가 변경되어도 현재 브라우저의
+ // 선택(activeId)을 절대로 원격 데이터로 강제 변경하지 않습니다.
+ // 이전 코드는 players[PLAYER_ID].activeId를 다시 적용하면서,
+ // 다른 사람의 시트 수정/동기화 시 본인 시트로 튕기는 현상이 발생할 수 있었습니다.
+ const previousActiveId = db.activeId;
+ const previousStillExists = !!previousActiveId && db.pcs.some(p=>p.id===previousActiveId);
  const mine = db.pcs.filter(p=>p.ownerId===PLAYER_ID);
- const savedActive = players[PLAYER_ID]?.activeId;
- db.activeId = (savedActive && db.pcs.some(p=>p.id===savedActive))
-   ? savedActive : (mine[0]?.id || db.pcs[0]?.id || null);
+ if(previousStillExists){
+   db.activeId = previousActiveId;
+ }else{
+   // 현재 보고 있던 시트가 삭제된 경우에만 본인 시트로 복귀합니다.
+   db.activeId = mine[0]?.id || db.pcs[0]?.id || null;
+ }
  return true;
 }
 
@@ -1327,7 +1337,7 @@ async function exportImage(){
  }
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-function renderAll(){renderPlayer();renderGM()}
+function renderAll(){renderPlayer();renderGM();renderSharedLog()}
 renderAll();
 
 // 방 코드가 저장돼 있으면 자동으로 재접속, 없으면 새로 물어봄
