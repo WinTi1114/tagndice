@@ -408,6 +408,11 @@ table.stuff-table input{width:100%}
   <button id="navPlayer" class="active" onclick="mode('player')">플레이어 시트</button>
   <button id="navGM" onclick="mode('gm')">GM 세션</button>
  </nav>
+ <div class="charbar">
+  <label>방 코드</label>
+  <button class="tbtn" id="roomCodeBtn" onclick="changeRoom()">-</button>
+  <span id="syncStatus" class="muted" style="min-width:70px;display:inline-block"></span>
+ </div>
 </div></header>
 
 <main class="wrap">
@@ -632,7 +637,92 @@ table.stuff-table input{width:100%}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-database-compat.js"></script>
 <script>
+/* ---------- Firebase realtime sync ----------
+   Everyone who enters the same "room code" shares one session (db object)
+   in Firebase Realtime Database. Local localStorage save/load logic is
+   untouched -- this layer just also pushes/pulls the same `db` object to
+   Firebase, keyed by room code, so persist()/persistQuiet() calls fan out
+   to every other tab in the room. */
+const firebaseConfig = {
+  apiKey: "AIzaSyAAzQuduoIMA-dno7QW9-HTQTk1uq2upic",
+  authDomain: "tag-dice.firebaseapp.com",
+  databaseURL: "https://tag-dice-default-rtdb.firebaseio.com",
+  projectId: "tag-dice",
+  storageBucket: "tag-dice.firebasestorage.app",
+  messagingSenderId: "585262459070",
+  appId: "1:585262459070:web:bb9fbb2f3bb530fffe56ef"
+};
+let fbdb = null;
+let firebaseReady = false;
+try{
+ if(typeof firebase === "undefined") throw new Error("firebase SDK script did not load (blocked by network/ad-blocker?)");
+ firebase.initializeApp(firebaseConfig);
+ fbdb = firebase.database();
+ firebaseReady = true;
+}catch(e){
+ console.error("Firebase 초기화 실패:", e);
+}
+const ROOM_KEY = "tagdice_room";
+const CLIENT_ID = crypto.randomUUID();
+let currentRoom = localStorage.getItem(ROOM_KEY) || "";
+let roomRef = null;
+let applyingRemote = false; // guard: true while we're writing a remote snapshot into `db`, so the
+                             // resulting persistQuiet() call doesn't immediately re-broadcast it back
+
+function setSyncStatus(text){
+ const el=document.getElementById("syncStatus");
+ if(el) el.textContent=text;
+}
+
+function joinRoom(room){
+ currentRoom = room;
+ localStorage.setItem(ROOM_KEY, room);
+ const btn=document.getElementById("roomCodeBtn");
+ if(btn) btn.textContent = room;
+ if(!firebaseReady){ setSyncStatus("동기화 불가 (로컬 전용)"); return; }
+ if(roomRef) roomRef.off();
+ if(!room){ setSyncStatus(""); roomRef=null; return; }
+ setSyncStatus("연결 중…");
+ roomRef = fbdb.ref("sessions/" + room);
+ roomRef.on("value", snap => {
+  const payload = snap.val();
+  if(!payload){
+   // empty room: seed it with whatever we currently have locally
+   pushToRoom();
+   setSyncStatus("연결됨 (첫 업로드)");
+   return;
+  }
+  if(payload.updatedBy === CLIENT_ID){ setSyncStatus("연결됨"); return; } // our own write, already reflected locally
+  applyingRemote = true;
+  db = payload.data;
+  db.gmLock = db.gmLock || {enabled:false,pin:""};
+  gmUnlocked = false;
+  renderAll();
+  applyingRemote = false;
+  setSyncStatus("연결됨 · 방금 업데이트됨");
+ }, err => {
+  setSyncStatus("연결 실패");
+  console.error(err);
+ });
+}
+
+function pushToRoom(){
+ if(!firebaseReady || !roomRef || applyingRemote) return;
+ roomRef.set({ data: db, updatedBy: CLIENT_ID, updatedAt: Date.now() })
+  .catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
+}
+
+async function changeRoom(){
+ const val = await modalPrompt("함께 쓸 방 코드를 입력하세요.\n(같은 코드를 입력한 사람끼리 실시간으로 데이터를 공유합니다)", currentRoom);
+ if(val===null) return;
+ const room = val.trim();
+ if(!room) return;
+ joinRoom(room);
+}
+
 const KEY="tagdice_v2";
 
 /* ---------- custom modal system ----------
@@ -740,10 +830,11 @@ let current=()=>db.pcs.find(p=>p.id===db.activeId)||db.pcs[0];
    persistQuiet(): just writes localStorage. Pair it with a small, targeted
    DOM update (or none) for anything typed into a field that already shows
    what was typed on its own. */
-function persist(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
+function persist(){localStorage.setItem(KEY,JSON.stringify(db));renderAll();pushToRoom()}
 function persistQuiet(){
  try{ localStorage.setItem(KEY,JSON.stringify(db)); }
  catch(e){ modalAlert("저장 공간이 부족합니다. 초상화 이미지가 너무 많거나 커서 브라우저 저장 한도를 넘었을 수 있어요."); }
+ pushToRoom();
 }
 function collect(){
  let p=current(); if(!p)return;
@@ -1027,6 +1118,14 @@ async function exportImage(){
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function renderAll(){renderPlayer();renderGM()}
 renderAll();
+
+// 방 코드가 저장돼 있으면 자동으로 재접속, 없으면 새로 물어봄
+if(currentRoom){
+ document.getElementById("roomCodeBtn").textContent = currentRoom;
+ joinRoom(currentRoom);
+}else{
+ setTimeout(()=>{ changeRoom(); }, 300);
+}
 </script>
 </body>
 </html>
