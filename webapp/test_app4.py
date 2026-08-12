@@ -71,28 +71,75 @@ def main():
         assert page.evaluate("() => current().erosion[0]") == ""
         assert ero_input.input_value() == ""
 
-        # ---- 5. resources: hexbadge icons + box click + -/+ buttons (ReferenceError regression)
+        # ---- 5. resources: hexbadge icons; health has NO +/- buttons (box-click only),
+        # other resources keep -/+ buttons (ReferenceError regression)
         res_rows = page.locator("#resources .res-row")
         assert res_rows.count() == 5, "expected 5 core resources (health/mind/fatigue + 피해+n/방어+n)"
         for i in range(5):
             hexicon = res_rows.nth(i).locator(".hexbadge .hb-fg").inner_text()
             assert hexicon in ("♥", "✦", "●", "⚔", "🛡"), f"missing resource hex icon: {hexicon!r}"
-        minus_btn = res_rows.nth(0).locator(".resource-actions button").nth(0)
-        plus_btn = res_rows.nth(0).locator(".resource-actions button").nth(1)
-        before = page.evaluate("() => current().health")
+
+        health_row = res_rows.nth(0)
+        mind_row = res_rows.nth(1)
+        assert health_row.locator(".resource-actions").count() == 0, "health should have NO +/- buttons (box-click only, per design)"
+        assert mind_row.locator(".resource-actions").count() == 1, "non-health resources should still show +/- buttons"
+
+        minus_btn = mind_row.locator(".resource-actions button").nth(0)
+        plus_btn = mind_row.locator(".resource-actions button").nth(1)
+        before = page.evaluate("() => current().mind")
         minus_btn.click(); page.wait_for_timeout(80)
-        after_minus = page.evaluate("() => current().health")
-        plus_btn = page.locator("#resources .res-row").nth(0).locator(".resource-actions button").nth(1)
+        after_minus = page.evaluate("() => current().mind")
+        plus_btn = page.locator("#resources .res-row").nth(1).locator(".resource-actions button").nth(1)
         plus_btn.click(); page.wait_for_timeout(80)
-        after_plus = page.evaluate("() => current().health")
+        after_plus = page.evaluate("() => current().mind")
         assert after_minus == before - 1, f"minus button failed: {before} -> {after_minus}"
         assert after_plus == before, f"plus button failed to restore: {before} -> {after_plus}"
         assert not errors, f"resource +/- buttons threw JS errors: {errors}"
-        box3 = res_rows.nth(0).locator(".track .box").nth(2)
-        box3.click(); page.wait_for_timeout(80)
-        assert page.evaluate("() => current().health") == 3, "clicking a track box should set current value directly"
+        mind_box1 = mind_row.locator(".track .box").nth(0)
+        mind_box1.click(); page.wait_for_timeout(80)
+        assert page.evaluate("() => current().mind") == 1, "clicking a track box should set current value directly (non-health resources)"
 
-        # ---- 5b. 피해+n / 방어+n: fixed 3/3 max, freely player-managed like other resources
+        # ---- 5a. health: 상처(wound) 칸 -- free/independent per-box toggle with X-mark +
+        # light red tint styling, NOT the old sequential "fill up to N" model (user
+        # explicitly chose free per-box toggle over sequential fill during design).
+        health_boxes = health_row.locator(".track .box")
+        assert health_boxes.count() == 10, "health should render 10 boxes like other growable resources"
+        assert page.evaluate("() => current().healthWounds") == [False] * 10, "health should start fully healthy (no wounds)"
+        assert page.evaluate("() => current().maxHealth") == 5
+        # wound box index 4 while leaving boxes 0-3 untouched -- proves free/independent
+        # toggling, not sequential fill-to-N
+        health_boxes.nth(4).click(); page.wait_for_timeout(80)
+        assert page.evaluate("() => current().healthWounds[4]") == True
+        assert page.evaluate("() => current().healthWounds.slice(0,4)") == [False, False, False, False], \
+            "wounding box 5 must not affect boxes 1-4 (free per-box toggle, not sequential fill)"
+        assert "wound" in (health_boxes.nth(4).get_attribute("class") or ""), "wounded box should carry the wound class (X + red tint styling)"
+        assert page.evaluate("() => healthCurrent(current())") == 4, "1 wound out of max 5 => current health 4"
+        # a box beyond maxHealth is disabled (locked by level) and must not be clickable
+        health_boxes.nth(7).click(); page.wait_for_timeout(80)
+        assert page.evaluate("() => current().healthWounds[7]") == False, "boxes beyond maxHealth are disabled, click must no-op"
+        assert "disabled" in (health_boxes.nth(7).get_attribute("class") or "")
+        assert not errors, f"health wound-box interactions threw JS errors: {errors}"
+
+        # ---- 5b. level-up: choosing 체력 bumps maxHealth AND fully heals (resets every
+        # wound) -- confirmed design: "체력 칸은 항상 최대치로 꽉 채움, 레벨 업을 하면
+        # 상처 칸은 초기화". Box 4 is still wounded from 5a above, so this also proves the
+        # reset actually clears an existing wound, not just a no-op on an already-healed sheet.
+        assert page.locator("#levelUpWrap button").count() == 1, "level-up button should be available (tagSum=9 from section 3)"
+        page.click("#levelUpWrap button")
+        page.wait_for_timeout(150)
+        assert page.locator("#modalOverlay").is_visible(), "level-up resource-choice modal should appear"
+        page.click("#modalButtons button:has-text('체력 +1')")
+        page.wait_for_timeout(150)
+        if page.locator("#modalOverlay").is_visible():  # trailing confirmation alert
+            page.click("#modalButtons button:has-text('확인')")
+            page.wait_for_timeout(150)
+        lvl = page.evaluate("() => ({max: current().maxHealth, wounds: current().healthWounds, cur: healthCurrent(current())})")
+        assert lvl["max"] == 6, f"maxHealth should be 6 after level-up, got {lvl['max']}"
+        assert lvl["wounds"] == [False] * 10, "level-up on health should reset ALL wounds (full heal)"
+        assert lvl["cur"] == 6
+        assert not errors, f"level-up threw JS errors: {errors}"
+
+        # ---- 5c. 피해+n / 방어+n: fixed 3/3 max, freely player-managed like other resources
         assert page.evaluate("() => current().dmgBonus") == 0, "피해+n should start empty"
         assert page.evaluate("() => current().defBonus") == 0, "방어+n should start empty"
         dmg_row = res_rows.nth(3)
@@ -248,25 +295,41 @@ def main():
         assert front_visible_print and back_visible_print, "both pages should render under print media"
         assert print_transform in ("none", "matrix(1, 0, 0, 1, 0, 0)"), f"print output must ignore any on-screen transform: {print_transform!r}"
 
-        # front/main height was deliberately raised twice:
-        #  1. +69.30px when 피해+n/방어+n were added to 핵심 자원 (2 more
-        #     res-rows in the .main right column).
-        #  2. +67.11px when the 태그 선언/컨디션/상처 rule-reference boxes
-        #     were moved from the bottom of .right to the bottom of .left,
-        #     to fill the empty space that used to sit under 침식 태그 (see
-        #     design_note_26_base.md-style screen-layout requests). Moving
-        #     them into the wider .left column shortens their own wrapped
-        #     text, but .left (table + erosion + the 3 boxes) still ends up
-        #     taller than .right (resources + judgment) used to be, so the
-        #     row grows a bit further even though the layout is now better
-        #     balanced on screen.
-        # Verified both times: only front.h and main.h moved, by the exact
-        # same delta; back/origin/column layout/cheat columns are untouched.
+        # front/main height was deliberately raised twice (front.h 1219.42 ->
+        # 1288.72 -> 1355.83px), once for 피해+n/방어+n and once for moving
+        # the 태그 선언/컨디션/상처 boxes into .left -- see prior git history
+        # for those deltas. By 1355.83px, front was ~359mm tall, well past
+        # one physical A4 sheet (297mm): exporting to an actual PDF
+        # (page.pdf(), not just this DOM-geometry emulation) silently spilled
+        # onto extra continuation pages per side.
+        #
+        # This pass compacted the print-only spacing (table/row padding,
+        # section gaps, card padding, rule-ref line-height, cheat-sheet list
+        # spacing, etc. -- all inside base/print rules or @media print, never
+        # touched inside @media screen) so front and back both fit within
+        # the min-height:297mm box again: front.h/back.h are now exactly
+        # 1122.52px (297mm), with real content comfortably under that floor
+        # (front .frame ~1114.7px, back .frame ~759.8px) -- confirmed via
+        # screen screenshots that on-screen layout is pixel-identical to
+        # before (print-only rules were the only ones edited).
+        #
+        # Separately, a real bug was found and fixed in @media print: base
+        # rule .papers-scroll{gap:16px;padding-bottom:6px} is meant for the
+        # side-by-side screen layout, but wasn't zeroed out for print, and
+        # was silently pushing the *combined* front+back flow past the A4
+        # page boundary -- causing page.pdf() to render 3 pages instead of 2
+        # even with front/back individually well under 297mm (reproduced
+        # with both pages' content completely hidden -- still 3 pages until
+        # this gap/padding was zeroed for print). Fixed by adding
+        # gap:0!important;padding-bottom:0!important to the existing
+        # `.papers-scroll{display:block!important;...}` print override.
+        # Verified: page.pdf() on the real, unmodified index.html now
+        # produces exactly 2 pages, matching real A4 paper size.
         PRINT_EXPECTED = {
-            "front": {"w": 793.69, "h": 1355.83},
+            "front": {"w": 793.69, "h": 1122.52},
             "back":  {"w": 793.69, "h": 1122.52},
-            "main":  {"w": 727.22, "h": 612.75},
-            "origin": {"w": 727.22, "h": 67.89},
+            "main":  {"w": 727.22, "h": 455.92},
+            "origin": {"w": 727.22, "h": 55.41},
             "mainCols": "419.172px 295.188px",
             "originCols": "236.359px 236.359px 236.359px",
             "cheatCols": "2",
@@ -281,6 +344,32 @@ def main():
             else:
                 assert got == want, f"print geometry drifted: {k} = {got!r}, expected {want!r}"
         print("print A4 geometry locked OK (210mm pages, 2-col body, 2-col rule summary)")
+
+        # ---- 15b. actual exported PDF is exactly 2 pages (not just DOM geometry)
+        # DOM measurement under emulate_media(print) does NOT catch every way real
+        # PDF pagination can spill onto extra pages (e.g. a stray print-mode
+        # gap/padding on a flex container that only shows up in page.pdf()'s real
+        # fragmentation pass -- see PRINT_EXPECTED comment above for the bug this
+        # caught). Generated from a FRESH page/tab, not the shared `page` above --
+        # once emulate_media() has been called on a page (as section 15 just did,
+        # print then back to screen), a later page.pdf() on that SAME page comes
+        # out broken (4 pages) regardless of content, which is a Playwright/
+        # Chromium quirk in emulate_media()+pdf() interaction, not a real bug in
+        # the document. A fresh tab sidesteps it and matches what an unrelated,
+        # real-world page.pdf() call (e.g. a plain render script) would produce.
+        try:
+            import pypdf
+            pdf_page = browser.new_page()
+            pdf_page.goto(url)
+            pdf_page.wait_for_timeout(300)
+            tmp_pdf = "/tmp/_test_app4_pagecount.pdf"
+            pdf_page.pdf(path=tmp_pdf, print_background=True, prefer_css_page_size=True)
+            pdf_page.close()
+            n_pages = len(pypdf.PdfReader(tmp_pdf).pages)
+            assert n_pages == 2, f"exported PDF should be exactly 2 pages (front+back), got {n_pages}"
+            print("exported PDF page count OK (2 pages, no scale/overflow tricks)")
+        except ImportError:
+            print("(skipped: pypdf not installed -- exported PDF page count not checked)")
 
         # ---- 16. desktop: front (left) / back (right) shown side by side (19차)
         front_box = page.locator(".paper.front").bounding_box()

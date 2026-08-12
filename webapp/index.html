@@ -94,22 +94,22 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .papers-scroll{display:flex;flex-direction:row;align-items:flex-start;gap:16px;width:max-content;padding-bottom:6px;transform-origin:top left}
 .paper-col{flex:0 0 auto}
 .paper{width:210mm;max-width:none;margin:0;background:var(--p-bg);box-shadow:0 8px 30px var(--shadow);}
-.frame{position:relative;padding:6.5mm 8mm 7mm 8mm;border:2.4pt solid var(--p-ink);outline:1pt solid var(--p-gold);outline-offset:-3mm;font-family:"Noto Serif KR",serif;color:var(--p-ink);}
+.frame{position:relative;padding:4.5mm 8mm 5mm 8mm;border:2.4pt solid var(--p-ink);outline:1pt solid var(--p-gold);outline-offset:-3mm;font-family:"Noto Serif KR",serif;color:var(--p-ink);}
 .corner{position:absolute;font-size:9pt;color:var(--p-gold);opacity:.8}
 .c-tl{top:2.6mm;left:3mm}.c-tr{top:2.6mm;right:3mm}.c-bl{bottom:2.4mm;left:3mm}.c-br{bottom:2.4mm;right:3mm}
 
-h2.sec{font-size:9.6pt;font-weight:900;color:var(--p-accent);letter-spacing:.5px;margin:0 0 1.3mm 0;padding:1mm 0 .8mm 0;border-top:1.1pt solid var(--p-gold);border-bottom:.5pt solid var(--p-gold);display:flex;align-items:center;gap:1.6mm}
+h2.sec{font-size:9.6pt;font-weight:900;color:var(--p-accent);letter-spacing:.5px;margin:0 0 .9mm 0;padding:.7mm 0 .5mm 0;border-top:1.1pt solid var(--p-gold);border-bottom:.5pt solid var(--p-gold);display:flex;align-items:center;gap:1.6mm}
 h2.sec:before{content:"◆";font-size:6pt;color:var(--p-gold)}
-h2.sec.sec-gap{margin-top:3.4mm}h2.sec.sec-gap2{margin-top:2.6mm}h2.sec.sec-flush{margin-top:0}
+h2.sec.sec-gap{margin-top:2.4mm}h2.sec.sec-gap2{margin-top:1.8mm}h2.sec.sec-flush{margin-top:0}
 .cap{font-size:6.3pt;color:var(--p-ink2);letter-spacing:.2px;font-weight:400}
 .p-field label,.field label{display:block;font-size:6.6pt;color:var(--p-gold);letter-spacing:.3px;margin-bottom:.6mm}
 .uline{border:0;background:transparent;outline:0;border-bottom:.75pt solid var(--p-line);width:100%;padding:1.4mm 1mm;font-size:8pt;color:var(--p-ink);font-family:inherit}
 .uline-text{display:inline-block;flex:1;border-bottom:.75pt solid var(--p-line);padding:1.4mm 1mm;min-height:5.5mm;font-weight:700;color:var(--p-ink);font-size:9pt}
 table.grid{border-collapse:collapse;width:100%}
-table.grid td,table.grid th{border:.6pt solid var(--p-line);padding:1mm 1.2mm;font-size:7.6pt}
+table.grid td,table.grid th{border:.6pt solid var(--p-line);padding:.3mm 1.2mm;font-size:7.6pt}
 table.grid th{background:var(--p-bg3);color:var(--p-ink2);font-weight:700;font-size:6.8pt}
 
-.head{display:flex;align-items:flex-start;gap:4mm;padding-bottom:2mm;margin-bottom:3mm;border-bottom:1.5pt solid var(--p-accent)}
+.head{display:flex;align-items:flex-start;gap:4mm;padding-bottom:1.1mm;margin-bottom:1.7mm;border-bottom:1.5pt solid var(--p-accent)}
 .head img.logo{height:17mm;display:block;flex:0 0 auto}
 .head .pcname{flex:1;display:flex;flex-direction:column;gap:1mm;padding-top:.5mm;min-width:0}
 .head .pcname input.big{font-size:12.5pt;font-weight:700}
@@ -131,33 +131,34 @@ table.grid th{background:var(--p-bg3);color:var(--p-ink2);font-weight:700;font-s
 .hexbadge.sm{width:5.6mm;height:5.6mm}
 .hexbadge.sm .hb-fg{font-size:6.2pt}
 
-.origin{display:grid;grid-template-columns:repeat(3,1fr);gap:2.4mm;margin-bottom:3.2mm}
-.origin .o-card{border:.7pt solid var(--p-ink2);border-radius:1mm;padding:1.6mm 2mm;background:var(--p-bg2)}
+.origin{display:grid;grid-template-columns:repeat(3,1fr);gap:2.4mm;margin-bottom:2.2mm}
+.origin .o-card{border:.7pt solid var(--p-ink2);border-radius:1mm;padding:.8mm 2mm;background:var(--p-bg2)}
 .origin .o-card .o-head{display:flex;align-items:center;gap:1.4mm}
 .origin .o-card .k{flex:1;font-size:6.8pt;font-weight:700;color:var(--p-accent)}
 .origin .o-card .capr{font-size:5.9pt;color:var(--p-gold);white-space:nowrap}
-.origin .o-card input.uline2{margin-top:1.6mm;width:100%;border:0;background:transparent;border-bottom:.75pt solid var(--p-line);padding:1.8mm 1mm;font-size:8.2pt;color:var(--p-ink);font-family:inherit}
+.origin .o-card input.uline2{margin-top:1.1mm;width:100%;border:0;background:transparent;border-bottom:.75pt solid var(--p-line);padding:1.2mm 1mm;font-size:8.2pt;color:var(--p-ink);font-family:inherit}
 
-.main{display:grid;grid-template-columns:1.42fr 1fr;gap:3.4mm;margin-bottom:3.6mm}
-.exp-table select,.exp-table input{width:100%;font-size:7.8pt;padding:.6mm}
+.main{display:grid;grid-template-columns:1.42fr 1fr;gap:3.4mm;margin-bottom:2mm}
+.exp-table select,.exp-table input{width:100%;font-size:7.8pt;padding:.18mm}
 .col-type{width:16%}.col-grade{width:20%}
 .exp-table td.ty{white-space:nowrap;text-align:center}
 .exp-table td.gr{text-align:center;white-space:nowrap}
 
-.erosion{display:flex;flex-direction:column;gap:1.8mm}
-.e-card{display:flex;align-items:center;gap:2.6mm;border:.7pt solid var(--p-ink2);border-radius:1mm;padding:1.4mm 2.4mm;background:var(--p-bg2);min-height:8mm}
+.erosion{display:flex;flex-direction:column;gap:1.05mm}
+.e-card{display:flex;align-items:center;gap:2.6mm;border:.7pt solid var(--p-ink2);border-radius:1mm;padding:.8mm 2.4mm;background:var(--p-bg2);min-height:6.3mm}
 .e-card input.uline{flex:1;margin:0}
 .e-card button.mini{flex:0 0 auto}
 
-.resource{display:flex;flex-direction:column;gap:3mm}
+.resource{display:flex;flex-direction:column;gap:2.2mm}
 .res-row .rlabel{display:flex;justify-content:space-between;align-items:center;gap:2mm;flex-wrap:wrap}
 .res-row .rmain{display:flex;align-items:center;gap:1.6mm}
 .res-row .n{font-size:8.6pt;font-weight:700;color:var(--p-ink)}
 .res-row .start{font-size:6.6pt;color:var(--p-gold);white-space:nowrap}
-.track{display:flex;align-items:center;gap:1.2mm;flex-wrap:wrap;margin:1.4mm 0 1mm 0}
+.track{display:flex;align-items:center;gap:1.2mm;flex-wrap:wrap;margin:1mm 0 .7mm 0}
 .track .box{width:4.6mm;height:4.6mm;border:.9pt solid var(--p-ink2);background:transparent;cursor:pointer;display:inline-block;padding:0}
 .track .box.disabled{opacity:.22;cursor:not-allowed}
 .track .box.on{background:#d8c69b}
+.track .box.wound{background:linear-gradient(45deg,transparent 44%,var(--p-accent) 44%,var(--p-accent) 56%,transparent 56%),linear-gradient(-45deg,transparent 44%,var(--p-accent) 44%,var(--p-accent) 56%,transparent 56%),rgba(122,31,43,.16)}
 .resource-actions{display:flex;gap:4px;margin-bottom:1mm}
 .resource-actions button{border:1px solid var(--p-line);background:var(--p-bg3);border-radius:4px;padding:2px 8px;font-size:12px}
 
@@ -166,37 +167,37 @@ table.grid th{background:var(--p-bg3);color:var(--p-ink2);font-weight:700;font-s
 .prob .p .n{font-size:8.6pt;font-weight:900;color:var(--p-accent);display:block}
 .prob .p .d{font-size:6.6pt;color:var(--p-ink2);line-height:1.25;display:block;margin-top:.5mm}
 
-.ruleref{border:.6pt dashed var(--p-gold);border-radius:1mm;padding:1.3mm 2.2mm;font-size:7.1pt;color:var(--p-ink2);line-height:1.48;margin-top:1.5mm}
+.ruleref{border:.6pt dashed var(--p-gold);border-radius:1mm;padding:.75mm 2.2mm;font-size:7.1pt;color:var(--p-ink2);line-height:1.18;margin-top:.9mm}
 .ruleref b{color:var(--p-accent2)}
 
-.magicitem{border:.8pt solid var(--p-accent2);border-radius:1mm;padding:1.6mm 2.4mm;background:var(--p-bg2);margin-bottom:2.4mm}
+.magicitem{border:.8pt solid var(--p-accent2);border-radius:1mm;padding:1mm 2.4mm;background:var(--p-bg2);margin-bottom:1.4mm}
 .mi-row{display:flex;gap:4mm;align-items:flex-end;flex-wrap:wrap}
 .mi-name{flex:1.4;min-width:120px}
 .mi-form,.mi-uses{font-size:7.6pt}
-.mi-form label,.mi-uses label,.mi-tag label{display:block;font-size:6.6pt;color:var(--p-gold);letter-spacing:.3px;margin-bottom:.7mm}
+.mi-form label,.mi-uses label,.mi-tag label{display:block;font-size:6.6pt;color:var(--p-gold);letter-spacing:.3px;margin-bottom:.5mm}
 .radio-inline{display:inline-flex;align-items:center;gap:.8mm;margin-right:3mm;font-size:8pt;white-space:nowrap}
 .radio-inline input{width:auto}
-.mi-tag{margin-top:2.2mm}
+.mi-tag{margin-top:1.5mm}
 
 .gear{margin-top:1mm}
-.stuff-head{font-size:6.5pt;line-height:1.5;color:var(--p-ink2);margin-bottom:1mm}
+.stuff-head{font-size:6.5pt;line-height:1.4;color:var(--p-ink2);margin-bottom:.8mm}
 .stuff-head b{color:var(--p-accent2);font-size:7.2pt}
-table.stuff-table td,table.stuff-table th{padding:.5mm 1.2mm;font-size:7.4pt}
+table.stuff-table td,table.stuff-table th{padding:.18mm 1.2mm;font-size:7.4pt}
 table.stuff-table td:first-child,table.stuff-table th:first-child{text-align:center;color:var(--p-ink2);width:8%}
 table.stuff-table input{width:100%}
-.gear-foot{display:flex;gap:4mm;margin-top:2.2mm;flex-wrap:wrap}
+.gear-foot{display:flex;gap:4mm;margin-top:1.6mm;flex-wrap:wrap}
 .gear-foot .field{flex:1;min-width:70px}
 
 /* ===== back page ===== */
-.head2{display:flex;align-items:center;gap:3mm;padding-bottom:1.8mm;margin-bottom:2.6mm;border-bottom:1.5pt solid var(--p-accent)}
+.head2{display:flex;align-items:center;gap:3mm;padding-bottom:1.3mm;margin-bottom:1.9mm;border-bottom:1.5pt solid var(--p-accent)}
 .head2 img.logo{height:10mm}
 .head2 .t{font-size:11.5pt;font-weight:900;color:var(--p-accent);letter-spacing:.5px;white-space:nowrap}
 .head2 .pcname{flex:1;display:flex;align-items:center;gap:2mm;min-width:0}
 .head2 .pcname label{font-size:7pt;color:var(--p-gold);white-space:nowrap}
 
 .back-grid{display:block}
-.story-panel{border:.6pt solid var(--p-ink2);border-radius:1mm;padding:2.6mm 2.8mm;background:var(--p-bg2)}
-.sp-top{display:flex;align-items:flex-start;gap:3.6mm;margin-bottom:2.4mm;padding-bottom:2.4mm;border-bottom:.6pt solid var(--p-line);flex-wrap:wrap}
+.story-panel{border:.6pt solid var(--p-ink2);border-radius:1mm;padding:1.8mm 2.4mm;background:var(--p-bg2)}
+.sp-top{display:flex;align-items:flex-start;gap:3.6mm;margin-bottom:1.8mm;padding-bottom:1.8mm;border-bottom:.6pt solid var(--p-line);flex-wrap:wrap}
 .portrait{position:relative;width:60mm;aspect-ratio:1/1;flex:0 0 auto;border:1pt solid var(--p-ink2);background:var(--p-bg);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--p-ink2);font-size:7.4pt;padding:2mm;border-radius:1mm;cursor:pointer;overflow:hidden}
 .portrait img{width:100%;height:100%;object-fit:cover;border-radius:.6mm}
 .portrait .cap{display:block;margin-top:1mm}
@@ -208,11 +209,11 @@ table.stuff-table input{width:100%}
 .sp-story .lbl{font-size:6.6pt;color:var(--p-gold);display:block;margin-bottom:1mm}
 .sp-story textarea{width:100%;min-height:60mm;font-size:8.4pt;line-height:1.6}
 
-.cheat-wrap{margin-top:3mm}
-.cheat{font-size:6.6pt;line-height:1.55;color:var(--p-ink2)}
+.cheat-wrap{margin-top:1.3mm}
+.cheat{font-size:6.6pt;line-height:1.3;color:var(--p-ink2)}
 .cheat b{color:var(--p-accent)}
 .cheat ul{margin:0;padding-left:3mm;column-count:2;column-gap:7mm}
-.cheat ul li{break-inside:avoid;margin-bottom:2.2mm}
+.cheat ul li{break-inside:avoid;margin-bottom:1.1mm}
 .cheat h2.sec{margin-top:0!important}
 
 /* ================================================================
@@ -391,7 +392,7 @@ table.stuff-table input{width:100%}
  body{background:#fff}
  .wrap{padding:0;max-width:none}
  .papers-viewport{height:auto!important;overflow:visible!important}
- .papers-scroll{display:block!important;overflow:visible;transform:none!important}
+ .papers-scroll{display:block!important;overflow:visible;transform:none!important;gap:0!important;padding-bottom:0!important}
  .paper-col{display:block}
  .paper{width:210mm;min-height:297mm;margin:0;box-shadow:none;page-break-after:always}
  .paper-col:last-child .paper{page-break-after:auto}
@@ -694,14 +695,22 @@ function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defau
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
 
 const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
-const blankPC=()=>({id:crypto.randomUUID(),name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,health:5,maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
+const blankPC=()=>({id:crypto.randomUUID(),name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
 let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:""}};
 db.activeId ||= db.pcs[0].id;
 db.gmLock = db.gmLock || {enabled:false,pin:""};
 let gmUnlocked = false;
 db.pcs.forEach(p=>{
   p.maxHealth=Math.min(10,p.maxHealth||5); p.maxMind=Math.min(10,p.maxMind||3); p.maxFatigue=Math.min(10,p.maxFatigue||3);
-  p.health=Math.min(p.maxHealth,p.health??p.maxHealth); p.mind=Math.min(p.maxMind,p.mind??p.maxMind); p.fatigue=Math.min(p.maxFatigue,p.fatigue??p.maxFatigue);
+  if(!Array.isArray(p.healthWounds)){
+   // migrate from the old single-number "health" field: mark the top
+   // (maxHealth - health) boxes as wounds, so previously "missing" HP
+   // becomes wounded boxes under the new free-toggle wound model.
+   let cur=Math.min(p.maxHealth,p.health??p.maxHealth);
+   p.healthWounds=Array(10).fill(false);
+   for(let i=cur;i<p.maxHealth;i++) p.healthWounds[i]=true;
+  }
+  p.mind=Math.min(p.maxMind,p.mind??p.maxMind); p.fatigue=Math.min(p.maxFatigue,p.fatigue??p.maxFatigue);
   // 피해+n / 방어+n: fixed at 3 max (not level-up growable, unlike health/mind/fatigue above)
   p.maxDmgBonus=3; p.maxDefBonus=3;
   p.dmgBonus=Math.min(p.maxDmgBonus,p.dmgBonus??0); p.defBonus=Math.min(p.maxDefBonus,p.defBonus??0);
@@ -845,12 +854,14 @@ async function levelUp(){
  if(!key) return;
  const maxKey="max"+key[0].toUpperCase()+key.slice(1);
  p[maxKey]=Math.min(10,(p[maxKey]||1)+1);
+ if(key==="health") p.healthWounds=Array(10).fill(false); // 레벨업: 체력 최대치 증가 + 상처 전부 회복
  p.levelUpsUsed=(p.levelUpsUsed||0)+1;
  persistQuiet();
  renderResources();
  updateLevelDisplay(p);
  const label={health:"체력",mind:"정신력",fatigue:"피로도"}[key];
- await modalAlert(`레벨업 완료! ${label} 최대치가 ${p[maxKey]}(으)로 늘었습니다.\n(침식 태그 정화는 각 침식 태그 옆 '정화' 버튼으로 별도 진행하세요.)`);
+ const extra=key==="health"?" 상처도 모두 회복되었습니다.":"";
+ await modalAlert(`레벨업 완료! ${label} 최대치가 ${p[maxKey]}(으)로 늘었습니다.${extra}\n(침식 태그 정화는 각 침식 태그 옆 '정화' 버튼으로 별도 진행하세요.)`);
 }
 function editTag(i,k,v){ current().experience[i][k]=v; persistQuiet(); updateLevelDisplay(current()); }
 function editErosion(i,v){ current().erosion[i]=v; persistQuiet(); }
@@ -862,9 +873,32 @@ function clearErosion(i){
 }
 function editInventory(i,v){ current().inventory[i]=v; persistQuiet(); }
 function setMagicForm(v){ current().magicForm=v; persistQuiet(); }
+function healthCurrent(p){
+ // 체력은 개별 상처(healthWounds) 배열 기반: 최대치에서 상처 칸 수를 뺀 값이 "현재 체력".
+ if(!Array.isArray(p.healthWounds)) return p.health??p.maxHealth??5;
+ let max=p.maxHealth||1,cur=0;
+ for(let i=0;i<max;i++) if(!p.healthWounds[i]) cur++;
+ return cur;
+}
 function renderResources(){
- let p=current(); let rows=[["health","체력","maxHealth","♥",10,true],["mind","정신력","maxMind","✦",10,true],["fatigue","피로도","maxFatigue","●",10,true],["dmgBonus","피해+n","maxDmgBonus","⚔",3,false],["defBonus","방어+n","maxDefBonus","🛡",3,false]];
- document.getElementById("resources").innerHTML=rows.map(([k,l,m,icon,cap,growable])=>{
+ let p=current();
+ if(!Array.isArray(p.healthWounds)) p.healthWounds=Array(10).fill(false);
+ let healthMax=p.maxHealth||1;
+ let healthBoxes=Array.from({length:10},(_,i)=>{
+   if(i>=healthMax) return `<span class="box disabled" title="레벨업으로 최대치 확장 후 사용 가능"></span>`;
+   let wounded=!!p.healthWounds[i];
+   let ttl=(i+1)+"번째 칸 · 클릭해서 상처 "+(wounded?"해제":"표시");
+   return `<span class="box ${wounded?"wound":"on"}" title="${ttl}" onclick="toggleHealthWound(${i})"></span>`;
+ }).join("");
+ let healthRow=`<div class="res-row">
+   <div class="rlabel">
+     <span class="rmain"><span class="hexbadge sm"><span class="hb-bg"></span><span class="hb-fg">♥</span></span><span class="n">체력</span></span>
+     <span class="start">${healthCurrent(p)}/${healthMax} · 레벨업 시 최대치 증가</span>
+   </div>
+   <div class="track">${healthBoxes}</div>
+ </div>`;
+ let rows=[["mind","정신력","maxMind","✦",10,true],["fatigue","피로도","maxFatigue","●",10,true],["dmgBonus","피해+n","maxDmgBonus","⚔",3,false],["defBonus","방어+n","maxDefBonus","🛡",3,false]];
+ document.getElementById("resources").innerHTML=healthRow+rows.map(([k,l,m,icon,cap,growable])=>{
    let max=p[m]||1;
    let boxes=Array.from({length:cap},(_,i)=>{
      let cls=i<max?(i<p[k]?"box on":"box"):"box disabled";
@@ -882,6 +916,15 @@ function renderResources(){
      </div>
    </div>`;
  }).join("");
+}
+function toggleHealthWound(i){
+ let p=current();
+ let max=p.maxHealth||1;
+ if(i<0||i>=max) return;
+ if(!Array.isArray(p.healthWounds)) p.healthWounds=Array(10).fill(false);
+ p.healthWounds[i]=!p.healthWounds[i];
+ persistQuiet();
+ renderResources();
 }
 function setRes(k,v){let p=current();let m="max"+k[0].toUpperCase()+k.slice(1);p[k]=Math.max(0,Math.min(p[m],v));persistQuiet();renderResources();}
 function useMagic(i){current().magicUses[i]=!current().magicUses[i];persistQuiet();renderMagic();}
@@ -953,8 +996,8 @@ function log(x){db.logs.push(new Date().toLocaleTimeString()+" · "+x);if(db.log
 function renderGM(){
  populateFields();
  document.getElementById("gmSecretFor").textContent=esc(current().name||"이름 없음");
- document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${p.health}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
- document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${p.health}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
+ document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${healthCurrent(p)}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
+ document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${healthCurrent(p)}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
  document.getElementById("log").innerHTML=db.logs.slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
 function addPC(){collect();let p=blankPC();p.name="새 캐릭터 "+(db.pcs.length+1);db.pcs.push(p);db.activeId=p.id;persist();mode("player")}
