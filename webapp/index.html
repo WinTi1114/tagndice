@@ -400,6 +400,14 @@ table.stuff-table input{width:100%}
  .paper-col:last-child .paper{page-break-after:auto}
  #playerView{display:block!important}
 }
+
+/* 다른 플레이어 시트 읽기 전용 */
+.sheet-readonly input:not([disabled]),
+.sheet-readonly textarea:not([disabled]),
+.sheet-readonly select:not([disabled]){background:#f3f3f3;cursor:not-allowed;}
+.sheet-readonly .track .box,
+.sheet-readonly .magic-check{pointer-events:none;opacity:.65;}
+.sheet-readonly .portrait{cursor:default;}
 </style>
 </head>
 <body>
@@ -421,7 +429,7 @@ table.stuff-table input{width:100%}
 <section id="playerView" class="view active">
 <div class="toolbar">
  <div class="charbar">
-  <label>내 캐릭터</label>
+  <label>캐릭터 보기</label>
   <select id="charSelect" onchange="setActive(this.value)"></select>
   <button class="tbtn" onclick="addMyCharacter()">＋ 새 캐릭터</button>
   <button class="tbtn" onclick="resetCharacter()">초기화</button>
@@ -730,8 +738,9 @@ function mergeRoomSnapshot(payload){
  db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:""};
  db.logs = Array.isArray(payload.meta?.logs) ? payload.meta.logs : (Array.isArray(payload.data?.logs) ? payload.data.logs : []);
  const mine = db.pcs.filter(p=>p.ownerId===PLAYER_ID);
- db.activeId = (players[PLAYER_ID]?.activeId && mine.some(p=>p.id===players[PLAYER_ID].activeId))
-   ? players[PLAYER_ID].activeId : (mine[0]?.id || db.pcs[0]?.id || null);
+ const savedActive = players[PLAYER_ID]?.activeId;
+ db.activeId = (savedActive && db.pcs.some(p=>p.id===savedActive))
+   ? savedActive : (mine[0]?.id || db.pcs[0]?.id || null);
  return true;
 }
 
@@ -754,15 +763,7 @@ function joinRoom(room){
    return;
   }
   applyingRemote = true;
-  const hadMyCharacter = myPCs().length>0;
   mergeRoomSnapshot(payload);
-  // 최초 입장자/기존 데이터가 없는 사용자는 자기 시트 1개를 자동 생성
-  if(!myPCs().length){
-   const p=blankPC();
-   p.ownerId=PLAYER_ID;
-   db.pcs.push(p);
-   db.activeId=p.id;
-  }
   db.gmLock = db.gmLock || {enabled:false,pin:""};
   gmUnlocked = false;
   renderAll();
@@ -775,24 +776,29 @@ function joinRoom(room){
  });
 }
 
+function syncPlayerNode(ownerId){
+ if(!firebaseReady || !roomRef || applyingRemote || !ownerId) return;
+ const target=db.pcs.find(p=>p.ownerId===ownerId);
+ const updates={};
+ if(target){
+  updates[`players/${ownerId}`]={pcs:[{...target,ownerId}],activeId:target.id,updatedAt:Date.now()};
+ }else{
+  updates[`players/${ownerId}`]=null;
+ }
+ updates.meta={
+  gmLock: db.gmLock || {enabled:false,pin:""},
+  logs: Array.isArray(db.logs) ? db.logs : [],
+  updatedAt: Date.now()
+ };
+ roomRef.update(updates).catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
+}
 function pushToRoom(){
  if(!firebaseReady || !roomRef || applyingRemote) return;
- const mine=myPCs().map(p=>({...p,ownerId:PLAYER_ID}));
- const updates={};
- updates[`players/${PLAYER_ID}`]={
-   pcs: mine,
-   activeId: mine.some(p=>p.id===db.activeId) ? db.activeId : (mine[0]?.id||null),
-   updatedAt: Date.now()
- };
- updates.meta={
-   gmLock: db.gmLock || {enabled:false,pin:""},
-   logs: Array.isArray(db.logs) ? db.logs : [],
-   updatedAt: Date.now()
- };
- roomRef.update(updates).catch(err=>{
-   setSyncStatus("동기화 실패");
-   console.error(err);
- });
+ const p=db.pcs.find(x=>x.id===db.activeId);
+ const ownerId=p?.ownerId || PLAYER_ID;
+ // 플레이어는 자기 시트만, GM은 현재 선택한 플레이어의 시트만 Firebase에 씁니다.
+ if(ownerId!==PLAYER_ID && !gmUnlocked) return;
+ syncPlayerNode(ownerId);
 }
 
 async function changeRoom(){
@@ -909,7 +915,9 @@ db.pcs.forEach(p=>{
    p.levelUpsUsed=Math.max(0,(p.maxHealth-5)+(p.maxMind-3)+(p.maxFatigue-3));
   }
 });
-let current=()=>db.pcs.find(p=>p.id===db.activeId && (currentView!=="player" || p.ownerId===PLAYER_ID)) || db.pcs.find(p=>p.ownerId===PLAYER_ID) || db.pcs[0];
+let current=()=>db.pcs.find(p=>p.id===db.activeId) || db.pcs.find(p=>p.ownerId===PLAYER_ID) || db.pcs[0];
+function canEditCharacter(p){ return !!p && (p.ownerId===PLAYER_ID || gmUnlocked); }
+function canEditCurrent(){ return canEditCharacter(current()); }
 
 /* persist(): full save + full structural re-render (rebuilds the tag/erosion/
    inventory row DOM). Only call this when the ACTIVE CHARACTER or the PC
@@ -927,10 +935,14 @@ function persistQuiet(){
  pushToRoom();
 }
 function collect(){
- let p=current(); if(!p)return;
- FIELD_KEYS.forEach(k=>{let e=document.getElementById(k);if(e)p[k]=e.value});
+ let p=current(); if(!p || !canEditCharacter(p))return;
+ FIELD_KEYS.forEach(k=>{
+   if(k==="secret" && currentView!=="gm") return;
+   let e=document.getElementById(k);
+   if(e) p[k]=e.value;
+ });
 }
-function saveField(){ collect(); persistQuiet(); }
+function saveField(){ if(!canEditCurrent()) return; collect(); persistQuiet(); }
 function populateFields(){
  let p=current(); if(!p)return;
  FIELD_KEYS.forEach(k=>{let e=document.getElementById(k);if(e)e.value=p[k]||""});
@@ -964,38 +976,53 @@ async function toggleGmLock(){
 function setActive(id){
  const p=db.pcs.find(x=>x.id===id);
  if(!p) return;
- if(currentView==="player" && p.ownerId!==PLAYER_ID){ modalAlert("다른 플레이어의 캐릭터 시트는 사용할 수 없습니다."); return; }
- collect(); db.activeId=id; persist(); mode("player");
+ collect();
+ db.activeId=id;
+ localStorage.setItem(KEY,JSON.stringify(db));
+ renderAll();
+ if(currentView!=="gm") mode("player");
 }
 function renderCharSelect(){
  const sel=document.getElementById("charSelect");
  if(!sel)return;
- const list = currentView==="player" ? myPCs() : db.pcs;
- sel.innerHTML=list.map(p=>`<option value="${p.id}" ${p.id===db.activeId?"selected":""}>${esc(p.name||"이름 없음")}</option>`).join("");
+ const list = db.pcs;
+ sel.innerHTML=list.map(p=>{
+   const ownerLabel=p.ownerId===PLAYER_ID?"내 캐릭터":"다른 플레이어 · 읽기 전용";
+   return `<option value="${p.id}" ${p.id===db.activeId?"selected":""}>${ownerLabel} — ${esc(p.name||"이름 없음")}</option>`;
+ }).join("");
 }
 function addMyCharacter(){addPC()}
 function deleteCharacter(){deleteCharacterById(db.activeId)}
 async function deleteCharacterById(id){
  const p=db.pcs.find(x=>x.id===id); if(!p)return;
- if(p.ownerId!==PLAYER_ID){ await modalAlert("다른 플레이어의 캐릭터는 삭제할 수 없습니다."); return; }
- if(myPCs().length<=1){ await modalAlert("내 캐릭터 시트는 최소 1개를 유지합니다. 내용을 지우려면 '초기화'를 사용하세요."); return; }
- const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터를 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`);
+ if(!canEditCharacter(p)){ await modalAlert("다른 플레이어의 캐릭터는 읽기 전용입니다."); return; }
+ const isMine=p.ownerId===PLAYER_ID;
+ const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터를 ${isMine?"삭제":"마스터 권한으로 삭제"}할까요?\n이 작업은 되돌릴 수 없습니다.`);
  if(!ok) return;
  collect();
+ const ownerId=p.ownerId;
  db.pcs=db.pcs.filter(x=>x.id!==id);
- if(db.activeId===id) db.activeId=db.pcs[0].id;
- persist();
+ db.activeId=(isMine ? (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null) : (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null));
+ localStorage.setItem(KEY,JSON.stringify(db));
+ renderAll();
+ if(firebaseReady && roomRef && !applyingRemote){
+   const updates={};
+   updates[`players/${ownerId}`]=null;
+   updates.meta={gmLock:db.gmLock||{enabled:false,pin:""},logs:db.logs||[],updatedAt:Date.now()};
+   roomRef.update(updates).catch(err=>console.error(err));
+ }
 }
 async function resetCharacter(){
  const p=current();
- if(!p || p.ownerId!==PLAYER_ID){ await modalAlert("현재 시트는 본인의 캐릭터 시트가 아닙니다."); return; }
- const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터의 모든 내용을 초기화할까요?\n이름·태그·자원·백스토리 등 전부 빈 캐릭터로 되돌아가며, 되돌릴 수 없습니다.`);
+ if(!canEditCharacter(p)){ await modalAlert("현재 시트는 읽기 전용입니다. 본인 시트 또는 마스터 권한에서만 초기화할 수 있습니다."); return; }
+ const isMine=p.ownerId===PLAYER_ID;
+ const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터의 모든 내용을 초기화할까요?\n${isMine?"본인 시트": "마스터 권한"}으로 이름·태그·자원·백스토리 등을 빈 캐릭터로 되돌립니다.`);
  if(!ok) return;
  const idx=db.pcs.findIndex(x=>x.id===p.id);
- if(idx<0) return;
+ if(idx<0)return;
  const fresh=blankPC();
- fresh.id=p.id; // keep same slot/identity, just wipe contents
- db.pcs[idx]=fresh;
+ fresh.id=p.id; fresh.ownerId=p.ownerId;
+ db.pcs[idx]=fresh; db.activeId=fresh.id;
  persist();
 }
 function renderPlayer(){
@@ -1011,6 +1038,29 @@ function renderPlayer(){
  renderResources();
  renderMagic();
  renderPortrait(p);
+ applySheetAccess(canEditCharacter(p));
+ const label=document.querySelector('#playerView .toolbar .charbar label');
+ if(label) label.textContent = p.ownerId===PLAYER_ID ? '내 캐릭터' : (gmUnlocked ? '마스터 편집 중' : '다른 플레이어 · 읽기 전용');
+}
+function applySheetAccess(canEdit){
+ const root=document.getElementById("playerView");
+ if(!root)return;
+ root.classList.toggle("sheet-readonly",!canEdit);
+ root.querySelectorAll('input, textarea, select').forEach(el=>{
+   if(el.id==="charSelect") return;
+   el.disabled=!canEdit;
+   el.readOnly=!canEdit;
+ });
+ root.querySelectorAll('button').forEach(btn=>{
+   if(btn.closest('.exportbar')) return;
+   btn.disabled=!canEdit;
+ });
+ const add=document.querySelector('button[onclick="addMyCharacter()"]');
+ const reset=document.querySelector('button[onclick="resetCharacter()"]');
+ const del=document.querySelector('button[onclick="deleteCharacter()"]');
+ if(add) add.disabled = myPCs().length>=1 || !canEdit;
+ if(reset) reset.disabled=!canEdit;
+ if(del) del.disabled=!canEdit;
 }
 function renderExperienceRows(p){
  document.getElementById("experience").innerHTML=p.experience.map((t,i)=>`<tr><td class="ty"><select onchange="editTag(${i},'type',this.value)"><option ${t.type==="지식"?"selected":""}>지식</option><option ${t.type==="기능"?"selected":""}>기능</option></select></td><td class="nm"><input placeholder="태그 이름" value="${esc(t.name)}" oninput="editTag(${i},'name',this.value)"></td><td class="gr"><select onchange="editTag(${i},'grade',+this.value)"><option value="1" ${t.grade==1?"selected":""}>Ⅰ</option><option value="2" ${t.grade==2?"selected":""}>Ⅱ</option><option value="3" ${t.grade==3?"selected":""}>Ⅲ</option></select></td></tr>`).join("");
@@ -1033,6 +1083,7 @@ function updateLevelDisplay(p){
  if(wrap) wrap.innerHTML = avail>0 ? `<button class="tbtn primary" style="margin-top:2px" onclick="levelUp()">🌟 레벨업! (${avail})</button>` : "";
 }
 async function levelUp(){
+ if(!canEditCurrent()){ await modalAlert("읽기 전용 시트입니다."); return; }
  const p=current();
  const avail=levelUpsAvailable(p);
  if(avail<=0){ await modalAlert("아직 레벨업 조건(경험 태그 등급 합이 다음 구간 도달)을 달성하지 않았습니다."); return; }
@@ -1053,16 +1104,17 @@ async function levelUp(){
  const extra=key==="health"?" 상처도 모두 회복되었습니다.":"";
  await modalAlert(`레벨업 완료! ${label} 최대치가 ${p[maxKey]}(으)로 늘었습니다.${extra}\n(침식 태그 정화는 각 침식 태그 옆 '정화' 버튼으로 별도 진행하세요.)`);
 }
-function editTag(i,k,v){ current().experience[i][k]=v; persistQuiet(); updateLevelDisplay(current()); }
-function editErosion(i,v){ current().erosion[i]=v; persistQuiet(); }
+function editTag(i,k,v){ if(!canEditCurrent()) return; current().experience[i][k]=v; persistQuiet(); updateLevelDisplay(current()); }
+function editErosion(i,v){ if(!canEditCurrent()) return; current().erosion[i]=v; persistQuiet(); }
 function clearErosion(i){
+ if(!canEditCurrent()) return;
  current().erosion[i]="";
  persistQuiet();
  const row=document.querySelectorAll("#erosion .e-card")[i];
  if(row){ const inp=row.querySelector("input"); if(inp) inp.value=""; }
 }
-function editInventory(i,v){ current().inventory[i]=v; persistQuiet(); }
-function setMagicForm(v){ current().magicForm=v; persistQuiet(); }
+function editInventory(i,v){ if(!canEditCurrent()) return; current().inventory[i]=v; persistQuiet(); }
+function setMagicForm(v){ if(!canEditCurrent()) return; current().magicForm=v; persistQuiet(); }
 function healthCurrent(p){
  // 체력은 개별 상처(healthWounds) 배열 기반: 최대치에서 상처 칸 수를 뺀 값이 "현재 체력".
  if(!Array.isArray(p.healthWounds)) return p.health??p.maxHealth??5;
@@ -1108,6 +1160,7 @@ function renderResources(){
  }).join("");
 }
 function toggleHealthWound(i){
+ if(!canEditCurrent()) return;
  let p=current();
  let max=p.maxHealth||1;
  if(i<0||i>=max) return;
@@ -1116,8 +1169,8 @@ function toggleHealthWound(i){
  persistQuiet();
  renderResources();
 }
-function setRes(k,v){let p=current();let m="max"+k[0].toUpperCase()+k.slice(1);p[k]=Math.max(0,Math.min(p[m],v));persistQuiet();renderResources();}
-function useMagic(i){current().magicUses[i]=!current().magicUses[i];persistQuiet();renderMagic();}
+function setRes(k,v){if(!canEditCurrent()) return; let p=current();let m="max"+k[0].toUpperCase()+k.slice(1);p[k]=Math.max(0,Math.min(p[m],v));persistQuiet();renderResources();}
+function useMagic(i){if(!canEditCurrent()) return; current().magicUses[i]=!current().magicUses[i];persistQuiet();renderMagic();}
 function renderMagic(){
  let p=current(), e=document.getElementById("magicUses");
  if(!e)return;
@@ -1125,6 +1178,7 @@ function renderMagic(){
 }
 function triggerPortraitUpload(){ document.getElementById("portraitFile").click(); }
 function handlePortraitUpload(input){
+ if(!canEditCurrent()){ input.value=""; return; }
  const file=input.files && input.files[0];
  input.value="";
  if(!file) return;
@@ -1151,6 +1205,7 @@ function handlePortraitUpload(input){
  reader.readAsDataURL(file);
 }
 function removePortrait(){
+ if(!canEditCurrent()) return;
  current().portrait="";
  persistQuiet();
  renderPortrait(current());
@@ -1169,6 +1224,7 @@ function renderPortrait(p){
  }
 }
 function roll(){
+ if(!canEditCurrent()){ modalAlert("다른 플레이어의 시트는 읽기 전용입니다."); return; }
  let a=1+Math.floor(Math.random()*6),b=1+Math.floor(Math.random()*6),n=a+b,o=outcome(n);
  document.getElementById("dice").textContent=`${a} + ${b} = ${n}`;document.getElementById("result").textContent=o;
  log(`플레이어 · ${current().name||"이름 없음"} · 2d6 ${a}+${b}=${n} · ${o}`);
