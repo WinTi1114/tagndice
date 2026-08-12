@@ -11,17 +11,13 @@
 - `webapp/index.html` — 캐릭터 시트 웹앱. 화면에서는 반응형 웹 레이아웃, 인쇄 시에는 A4 고정 PDF 출력을 지원합니다.
 - `webapp/test_app4.py` — 웹앱 회귀 테스트 스위트 (Playwright 기반). 화면 반응형 동작과 인쇄 출력 기하 구조를 함께 검증합니다.
 - `render.py`, `build_xlsx.py` — 캐릭터 시트 PDF/XLSX 생성 스크립트
+- 데이터 베이스는 파이어 베이스로 구성을 하였고 https://console.firebase.google.com/
+- 서버는 깃허브로 열었습니다.
 
 ## 웹앱 사용법
 
-`webapp/index.html`을 브라우저로 열면 바로 사용할 수 있습니다. 별도 빌드 과정이 없습니다.
-
-## 테스트 실행
-
-```bash
-cd webapp
-python test_app4.py
-```
+해당 링크로 접속하면 바로 사용할 수 있습니다. 별도 빌드 과정이 없습니다.
+https://winti1114.github.io/tagndice/
 
 ## 라이선스
 
