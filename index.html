@@ -735,7 +735,7 @@ function mergeRoomSnapshot(payload){
   if(legacy) allPCs.push({...legacy, ownerId:PLAYER_ID});
  }
  db.pcs = allPCs;
- db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:""};
+ db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:"",ownerId:""};
  db.logs = Array.isArray(payload.meta?.logs) ? payload.meta.logs : (Array.isArray(payload.data?.logs) ? payload.data.logs : []);
  const mine = db.pcs.filter(p=>p.ownerId===PLAYER_ID);
  const savedActive = players[PLAYER_ID]?.activeId;
@@ -764,8 +764,8 @@ function joinRoom(room){
   }
   applyingRemote = true;
   mergeRoomSnapshot(payload);
-  db.gmLock = db.gmLock || {enabled:false,pin:""};
-  gmUnlocked = false;
+  db.gmLock = db.gmLock || {enabled:false,pin:"",ownerId:""};
+  gmUnlocked = !!(db.gmLock.enabled && db.gmLock.ownerId===PLAYER_ID);
   renderAll();
   applyingRemote = false;
   if(!hadMyCharacter) pushToRoom();
@@ -786,7 +786,7 @@ function syncPlayerNode(ownerId){
   updates[`players/${ownerId}`]=null;
  }
  updates.meta={
-  gmLock: db.gmLock || {enabled:false,pin:""},
+  gmLock: db.gmLock || {enabled:false,pin:"",ownerId:""},
   logs: Array.isArray(db.logs) ? db.logs : [],
   updatedAt: Date.now()
  };
@@ -872,7 +872,7 @@ function modalChoice(msg,options){ return showModal({message:msg,type:"choice",o
 
 const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
 const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
-let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:""}};
+let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
 db.pcs = Array.isArray(db.pcs) ? db.pcs : [];
 // 기존 로컬 저장 데이터에는 ownerId가 없으므로 현재 브라우저의 소유권으로 이전합니다.
 db.pcs.forEach(ensurePCOwner);
@@ -951,27 +951,62 @@ function populateFields(){
  document.querySelectorAll('input[name="magicForm"]').forEach(r=>{ r.checked = (r.value===(p.magicForm||"")); });
 }
 async function mode(x){
- currentView=x;
- if(x==="gm" && db.gmLock.enabled && !gmUnlocked){
-  const pin=await modalPrompt("GM 세션 PIN을 입력하세요.");
-  if(pin===null) return;
-  if(pin!==db.gmLock.pin){ await modalAlert("PIN이 올바르지 않습니다."); return; }
-  gmUnlocked=true;
+ if(x==="gm"){
+  const lock=db.gmLock||{enabled:false,pin:"",ownerId:""};
+  if(lock.enabled && lock.ownerId && lock.ownerId!==PLAYER_ID){
+   await modalAlert("현재 GM 권한은 다른 한 명의 사용자에게 이미 할당되어 있습니다.");
+   return;
+  }
+  if(lock.enabled && !gmUnlocked){
+   const pin=await modalPrompt("GM 세션 PIN을 입력하세요.");
+   if(pin===null) return;
+   if(pin!==lock.pin){ await modalAlert("PIN이 올바르지 않습니다."); return; }
+   if(lock.ownerId && lock.ownerId!==PLAYER_ID){ await modalAlert("현재 GM 권한은 다른 사용자에게 할당되어 있습니다."); return; }
+   gmUnlocked=true;
+  }
  }
+ currentView=x;
  document.getElementById("playerView").classList.toggle("active",x==="player");document.getElementById("gmView").classList.toggle("active",x==="gm");document.getElementById("navPlayer").classList.toggle("active",x==="player");document.getElementById("navGM").classList.toggle("active",x==="gm");renderAll()
 }
 async function toggleGmLock(){
- if(!db.gmLock.enabled){
-  const pin=await modalPrompt("설정할 GM PIN을 입력하세요.\n(플레이어에게 공개되지 않는 값으로 정하세요)");
-  if(!pin) return;
-  db.gmLock={enabled:true,pin};
-  gmUnlocked=true;
-  await modalAlert("GM 잠금이 설정되었습니다. 다음에 브라우저를 새로고침하면 GM 세션 진입 시 PIN을 요구합니다.");
- }else{
-  db.gmLock={enabled:false,pin:""};
-  await modalAlert("GM 잠금이 해제되었습니다.");
+ const currentLock=db.gmLock||{enabled:false,pin:"",ownerId:""};
+ if(!firebaseReady || !roomRef){
+  if(!currentLock.enabled){
+   const pin=await modalPrompt("설정할 GM PIN을 입력하세요."); if(!pin)return;
+   db.gmLock={enabled:true,pin,ownerId:PLAYER_ID}; gmUnlocked=true; persist();
+   await modalAlert("이 브라우저가 GM 권한을 획득했습니다.");
+  }else if(currentLock.ownerId===PLAYER_ID){
+   db.gmLock={enabled:false,pin:"",ownerId:""}; gmUnlocked=false; persist();
+   await modalAlert("GM 잠금이 해제되었습니다.");
+  }else await modalAlert("이미 다른 사용자가 GM 권한을 가지고 있습니다.");
+  return;
  }
- persist();
+ const ref=roomRef.child("meta/gmLock");
+ if(currentLock.enabled){
+  if(currentLock.ownerId!==PLAYER_ID){ await modalAlert("현재 GM 권한은 다른 사용자에게 할당되어 있습니다."); return; }
+  await ref.set({enabled:false,pin:"",ownerId:""});
+  db.gmLock={enabled:false,pin:"",ownerId:""}; gmUnlocked=false;
+  renderAll();
+  await modalAlert("GM 잠금이 해제되었습니다.");
+  return;
+ }
+ const pin=await modalPrompt("설정할 GM PIN을 입력하세요.\n이 방에서는 한 명만 GM 권한을 가질 수 있습니다.");
+ if(!pin)return;
+ try{
+  const result=await ref.transaction(cur=>{
+   if(cur && cur.enabled) return; // 이미 다른 사용자가 선점
+   return {enabled:true,pin,ownerId:PLAYER_ID};
+  });
+  if(!result.committed){
+   const cur=result.snapshot.val()||{};
+   db.gmLock=cur; gmUnlocked=false; renderAll();
+   await modalAlert("다른 사용자가 먼저 GM 권한을 획득했습니다.");
+   return;
+  }
+  db.gmLock={enabled:true,pin,ownerId:PLAYER_ID}; gmUnlocked=true;
+  renderAll();
+  await modalAlert("GM 권한을 획득했습니다. 이 방에서는 현재 사용자 한 명만 GM으로 동작합니다.");
+ }catch(err){ console.error(err); await modalAlert("GM 권한 설정에 실패했습니다."); }
 }
 function setActive(id){
  const p=db.pcs.find(x=>x.id===id);
@@ -1008,7 +1043,7 @@ async function deleteCharacterById(id){
  if(firebaseReady && roomRef && !applyingRemote){
    const updates={};
    updates[`players/${ownerId}`]=null;
-   updates.meta={gmLock:db.gmLock||{enabled:false,pin:""},logs:db.logs||[],updatedAt:Date.now()};
+   updates.meta={gmLock:db.gmLock||{enabled:false,pin:"",ownerId:""},logs:db.logs||[],updatedAt:Date.now()};
    roomRef.update(updates).catch(err=>console.error(err));
  }
 }
@@ -1038,6 +1073,7 @@ function renderPlayer(){
  renderResources();
  renderMagic();
  renderPortrait(p);
+ renderSharedLog();
  applySheetAccess(canEditCharacter(p));
  const label=document.querySelector('#playerView .toolbar .charbar label');
  if(label) label.textContent = p.ownerId===PLAYER_ID ? '내 캐릭터' : (gmUnlocked ? '마스터 편집 중' : '다른 플레이어 · 읽기 전용');
@@ -1058,7 +1094,7 @@ function applySheetAccess(canEdit){
  const add=document.querySelector('button[onclick="addMyCharacter()"]');
  const reset=document.querySelector('button[onclick="resetCharacter()"]');
  const del=document.querySelector('button[onclick="deleteCharacter()"]');
- if(add) add.disabled = myPCs().length>=1 || !canEdit;
+ if(add) add.disabled = myPCs().length>=1;
  if(reset) reset.disabled=!canEdit;
  if(del) del.disabled=!canEdit;
 }
@@ -1254,16 +1290,20 @@ function renderGM(){
 function addPC(){
  const mine=myPCs();
  if(mine.length>=1){
-  modalAlert("한 사람당 캐릭터 시트는 1개만 사용할 수 있습니다.\n현재 시트를 계속 사용하거나 초기화해서 다시 작성해 주세요.");
+  modalAlert("한 사람당 캐릭터 시트는 1개만 사용할 수 있습니다.\n현재 시트를 계속 사용해 주세요.");
   return;
  }
- collect();
- let p=blankPC();
+ const p=blankPC();
  p.ownerId=PLAYER_ID;
  p.name="새 캐릭터";
- db.pcs.push(p); db.activeId=p.id; persist(); mode("player");
+ db.pcs.push(p);
+ db.activeId=p.id;
+ localStorage.setItem(KEY,JSON.stringify(db));
+ renderAll();
+ if(firebaseReady && roomRef && !applyingRemote) syncPlayerNode(PLAYER_ID);
+ mode("player");
 }
-function clearLog(){db.logs=[];persistQuiet();renderGM();}
+function clearLog(){if(!gmUnlocked){modalAlert("GM 권한이 필요합니다.");return;}db.logs=[];persistQuiet();renderGM();renderSharedLog();}
 function exportData(){collect();let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tag-and-dice-session.json";a.click();URL.revokeObjectURL(a.href)}
 function importData(){let i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=()=>{let f=i.files[0];if(!f)return;let r=new FileReader();r.onload=async()=>{try{db=JSON.parse(r.result);db.gmLock=db.gmLock||{enabled:false,pin:""};gmUnlocked=false;persist()}catch(e){await modalAlert("파일을 읽을 수 없습니다.")}};r.readAsText(f)};i.click()}
 async function exportImage(){
