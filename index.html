@@ -68,7 +68,7 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .log div{height:24px;box-sizing:border-box;padding:4px 0;border-bottom:1px solid #c6b58e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shared-log-wrap{background:var(--paper2);border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:14px}
 .shared-log-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800;color:var(--red);font-size:14px;margin-bottom:2px}
-.shared-log-wrap .log{max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden}
+.shared-log-wrap .log{height:120px;max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 .modal-overlay{position:fixed;inset:0;background:rgba(30,20,10,.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
 .modal-box{background:var(--paper);border:2px solid #46351f;box-shadow:0 10px 40px rgba(0,0,0,.4);padding:20px;max-width:380px;width:100%}
 .modal-message{white-space:pre-line;margin-bottom:14px;line-height:1.6;font-size:14px}
@@ -715,6 +715,7 @@ function ensureMyCharacter(){
  p.name="새 캐릭터";
  db.pcs.push(p);
  db.activeId=p.id;
+ renderedPlayerId=null;
  return p;
 }
 
@@ -952,7 +953,13 @@ function collect(){
    if(e) p[k]=e.value;
  });
 }
-function saveField(){ if(!canEditCurrent()) return; collect(); persistQuiet(); }
+function saveField(){
+ if(!canEditCurrent()) return;
+ // Save the model/Firebase only. Do NOT call renderAll() here: replacing an
+ // input on every keystroke breaks caret position and Korean IME composition.
+ collect();
+ persistQuiet();
+}
 function populateFields(){
  let p=current(); if(!p)return;
  FIELD_KEYS.forEach(k=>{let e=document.getElementById(k);if(e)e.value=p[k]||""});
@@ -1023,6 +1030,7 @@ function setActive(id){
  if(!p) return;
  collect();
  db.activeId=id;
+ renderedPlayerId=null;
  localStorage.setItem(KEY,JSON.stringify(db));
  renderAll();
  if(currentView!=="gm") mode("player");
@@ -1047,6 +1055,7 @@ async function deleteCharacterById(id){
  collect();
  const ownerId=p.ownerId;
  db.pcs=db.pcs.filter(x=>x.id!==id);
+ renderedPlayerId=null;
  db.activeId=(isMine ? (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null) : (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null));
  localStorage.setItem(KEY,JSON.stringify(db));
  renderAll();
@@ -1067,18 +1076,30 @@ async function resetCharacter(){
  if(idx<0)return;
  const fresh=blankPC();
  fresh.id=p.id; fresh.ownerId=p.ownerId;
- db.pcs[idx]=fresh; db.activeId=fresh.id;
+ db.pcs[idx]=fresh; db.activeId=fresh.id; renderedPlayerId=null;
  persist();
 }
+let renderedPlayerId = null;
+function playerHasFocusedEditable(){
+ const root=document.getElementById("playerView");
+ const a=document.activeElement;
+ return !!(root && a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
 function renderPlayer(){
- // FULL/structural render -- rebuilds the row lists, so only call this from
- // persist() (character switch / add / delete / import / initial load).
+ // IMPORTANT: Firebase value events can arrive while the user is typing.
+ // Never rebuild/populate the focused input in that situation; doing so
+ // replaces the DOM node, moves the caret and breaks Korean IME composition.
  const p=current(); if(!p)return;
- populateFields();
+ const activeIdChanged = renderedPlayerId!==p.id;
+ const typing = playerHasFocusedEditable() && !activeIdChanged;
+ if(!typing){
+   populateFields();
+   renderExperienceRows(p);
+   renderErosionRows(p);
+   renderInventoryRows(p);
+   renderedPlayerId=p.id;
+ }
  renderCharSelect();
- renderExperienceRows(p);
- renderErosionRows(p);
- renderInventoryRows(p);
  updateLevelDisplay(p);
  renderResources();
  renderMagic();
@@ -1291,7 +1312,10 @@ function renderSharedLog(){
  el.innerHTML=(db.logs||[]).slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
 function renderGM(){
- populateFields();
+ // renderAll() is also called by Firebase while a player is typing.
+ // Never repopulate player-sheet fields from the GM renderer unless the GM
+ // view is actually active; otherwise equipment/name inputs get overwritten.
+ if(currentView==="gm") populateFields();
  document.getElementById("gmSecretFor").textContent=esc(current().name||"이름 없음");
  document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${healthCurrent(p)}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
  document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${healthCurrent(p)}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
@@ -1308,6 +1332,7 @@ function addPC(){
  p.name="새 캐릭터";
  db.pcs.push(p);
  db.activeId=p.id;
+ renderedPlayerId=null;
  localStorage.setItem(KEY,JSON.stringify(db));
  renderAll();
  if(firebaseReady && roomRef && !applyingRemote) syncPlayerNode(PLAYER_ID);
