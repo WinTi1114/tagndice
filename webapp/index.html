@@ -174,6 +174,7 @@ table.grid th{background:var(--p-bg3);color:var(--p-ink2);font-weight:700;font-s
 .ruleref b{color:var(--p-accent2)}
 
 .magicitem{border:.8pt solid var(--p-accent2);border-radius:1mm;padding:1mm 2.4mm;background:var(--p-bg2);margin-bottom:1.4mm}
+.familiar{border:.8pt solid var(--p-accent2);border-radius:1mm;padding:1mm 2.4mm;background:var(--p-bg2);margin-bottom:1.4mm}
 .mi-row{display:flex;gap:4mm;align-items:flex-end;flex-wrap:wrap}
 .mi-name{flex:1.4;min-width:120px}
 .mi-form,.mi-uses{font-size:7.6pt}
@@ -541,6 +542,17 @@ table.stuff-table input{width:100%}
    <div class="field mi-tag"><label>전용 태그 — 경험 태그와 유일하게 중첩 가능 (판정/선언 시 함께 걸어 두 효과를 하나의 묘사로 엮음)</label><input id="dedicatedTag" class="uline" oninput="saveField()"></div>
   </div>
 
+  <div class="familiar">
+   <h2 class="sec sec-flush">패밀리어 <span class="cap">— 마법 물품과 양자택일. 체력 3칸·정신력/피로도 없음. 세션당 3회, 내 차례에 1회만 발동</span></h2>
+   <div class="mi-row">
+    <div class="field mi-name"><label>이름</label><input id="familiarName" class="uline" oninput="saveField()"></div>
+    <div class="mi-form"><label>형태</label><input id="familiarForm" class="uline" oninput="saveField()" placeholder="동물·정령·기계 등" style="width:34mm"></div>
+    <div class="mi-uses"><label>체력</label><div id="familiarHP" class="actions"></div></div>
+    <div class="mi-uses"><label>사용(세션당)</label><div id="familiarUses" class="actions"></div></div>
+   </div>
+   <div class="field mi-tag"><label>고유 태그 — 1등급 고정, 경험 태그와 유일하게 중첩 가능</label><input id="familiarTag" class="uline" oninput="saveField()"></div>
+  </div>
+
   <div class="gear">
    <h2 class="sec">장비 &amp; 소지품 <span class="cap">— 착용 장비·마법 물품은 소지품 한도 제외</span></h2>
    <div class="stuff-head"><b>소지품 태그</b> — 몸에 지니고 다니는 의미 있는 물건(귀중한 전리품·유물·특수 재료 등)만 취급합니다. 사소하고 대수롭지 않은 물건은 한도에 포함되지 않으며, 자리가 다 찼으면 기존 소지품 태그 하나를 버리거나 내려놓고 즉시 새로 획득할 수 있습니다. (최대 10개)</div>
@@ -881,8 +893,8 @@ function modalConfirm(msg){ return showModal({message:msg,type:"confirm"}); }
 function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defaultValue:def||""}); }
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
 
-const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
-const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
+const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","familiarName","familiarForm","familiarTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
+const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],familiarName:"",familiarForm:"",familiarTag:"",familiarUses:[false,false,false],familiarHealth:[true,true,true],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
 let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
 db.pcs = Array.isArray(db.pcs) ? db.pcs : [];
 // 기존 로컬 저장 데이터에는 ownerId가 없으므로 현재 브라우저의 소유권으로 이전합니다.
@@ -913,6 +925,11 @@ db.pcs.forEach(p=>{
   p.dmgBonus=Math.min(p.maxDmgBonus,p.dmgBonus??0); p.defBonus=Math.min(p.maxDefBonus,p.defBonus??0);
   p.magicUses=p.magicUses||[false,false,false];
   p.magicForm=p.magicForm||"";
+  p.familiarName=p.familiarName??"";
+  p.familiarForm=p.familiarForm??"";
+  p.familiarTag=p.familiarTag??"";
+  p.familiarUses=p.familiarUses||[false,false,false];
+  p.familiarHealth=p.familiarHealth||[true,true,true];
   p.erosion=p.erosion||["","",""];
   p.inventory=p.inventory||Array(10).fill("");
   p.gold=p.gold??""; p.silver=p.silver??""; p.copper=p.copper??""; p.shard=p.shard??"";
@@ -1103,6 +1120,7 @@ function renderPlayer(){
  updateLevelDisplay(p);
  renderResources();
  renderMagic();
+ renderFamiliar();
  renderPortrait(p);
  renderSharedLog();
  applySheetAccess(canEditCharacter(p));
@@ -1242,6 +1260,13 @@ function renderMagic(){
  let p=current(), e=document.getElementById("magicUses");
  if(!e)return;
  e.innerHTML=p.magicUses.map((used,i)=>`<button type="button" class="magic-check ${used?"checked":""}" onclick="useMagic(${i})">${used?"☑":"☐"} 사용 ${i+1}</button>`).join("");
+}
+function useFamiliar(i){if(!canEditCurrent()) return; current().familiarUses[i]=!current().familiarUses[i];persistQuiet();renderFamiliar();}
+function toggleFamiliarHP(i){if(!canEditCurrent()) return; current().familiarHealth[i]=!current().familiarHealth[i];persistQuiet();renderFamiliar();}
+function renderFamiliar(){
+ let p=current(), eu=document.getElementById("familiarUses"), eh=document.getElementById("familiarHP");
+ if(eu) eu.innerHTML=p.familiarUses.map((used,i)=>`<button type="button" class="magic-check ${used?"checked":""}" onclick="useFamiliar(${i})">${used?"☑":"☐"} 사용 ${i+1}</button>`).join("");
+ if(eh) eh.innerHTML=p.familiarHealth.map((ok,i)=>`<button type="button" class="magic-check ${ok?"":"checked"}" onclick="toggleFamiliarHP(${i})">${ok?"♥":"☠"} ${i+1}</button>`).join("");
 }
 function triggerPortraitUpload(){ document.getElementById("portraitFile").click(); }
 function handlePortraitUpload(input){
