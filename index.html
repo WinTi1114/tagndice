@@ -425,9 +425,42 @@ table.stuff-table input{width:100%}
 .sheet-readonly .track .box,
 .sheet-readonly .magic-check{pointer-events:none;opacity:.65;}
 .sheet-readonly .portrait{cursor:default;}
+
+/* ===== temporary login gate ===== */
+body.auth-locked .app{visibility:hidden;pointer-events:none;}
+#authGate{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(30,20,10,.72);backdrop-filter:blur(3px);}
+#authGate[hidden]{display:none;}
+.auth-card{width:min(420px,100%);background:var(--paper);border:2px solid #46351f;box-shadow:0 14px 55px rgba(0,0,0,.45);padding:24px;border-radius:8px;}
+.auth-card h1{margin:0 0 6px;color:var(--red);font-size:24px;}
+.auth-card p{margin:0 0 16px;line-height:1.55;font-size:13px;color:var(--ink);}
+.auth-field{margin:10px 0;}
+.auth-field label{display:block;font-size:12px;color:var(--red);font-weight:700;margin-bottom:5px;}
+.auth-field input{width:100%;border:1px solid var(--line);background:var(--white);border-radius:5px;padding:10px 11px;outline:none;}
+.auth-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;}
+.auth-actions button{border:1px solid var(--line);background:var(--paper2);border-radius:6px;padding:9px 13px;}
+.auth-actions .primary{background:var(--red);color:#fff9ea;}
+.auth-note{margin-top:12px;font-size:11px;color:#8a7452;line-height:1.5;}
+.auth-error{display:none;margin-top:10px;padding:9px;border:1px solid #b56a70;background:#f5dfdf;border-radius:5px;color:#6d2730;font-size:12px;white-space:pre-line;}
+#authUserBox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;}
+#authUserName{font-weight:700;color:var(--red);}
+#logoutBtn{display:none;}
 </style>
 </head>
-<body>
+<body class="auth-locked">
+<div id="authGate">
+ <div class="auth-card">
+  <h1>TAG &amp; DICE 로그인</h1>
+  <p>로그인하기 전에는 캐릭터 시트와 방 기능을 사용할 수 없습니다.<br>이 페이지의 <b>임시 로그인</b>은 Firebase Realtime Database에 사용자별 캐릭터를 연결하기 위한 기능입니다.</p>
+  <div class="auth-field"><label for="authUsername">사용자 이름</label><input id="authUsername" maxlength="40" autocomplete="username" placeholder="예: player01"></div>
+  <div class="auth-field"><label for="authPin">임시 비밀번호 / PIN</label><input id="authPin" type="password" maxlength="64" autocomplete="current-password" placeholder="4자 이상"></div>
+  <div class="auth-actions">
+   <button class="primary" onclick="loginOrCreate(false)">로그인</button>
+   <button onclick="loginOrCreate(true)">새 임시 계정 만들기</button>
+  </div>
+  <div id="authError" class="auth-error"></div>
+  <div class="auth-note">현재 프로젝트용 임시 계정입니다. 실서비스용 비밀번호 인증이 아닌 개발/테스트 목적의 로그인 방식입니다.</div>
+ </div>
+</div>
 <div class="app">
 <header class="topbar"><div class="topbar-inner">
  <div class="brand"><div class="brand-mark">✦</div><div>TAG & DICE</div></div>
@@ -439,6 +472,10 @@ table.stuff-table input{width:100%}
   <label>방 코드</label>
   <button class="tbtn" id="roomCodeBtn" onclick="changeRoom()">-</button>
   <span id="syncStatus" class="muted" style="min-width:70px;display:inline-block"></span>
+  <div id="authUserBox">
+   <span>로그인: <span id="authUserName">-</span></span>
+   <button class="tbtn danger" id="logoutBtn" onclick="logoutApp()">로그아웃</button>
+  </div>
  </div>
 </div></header>
 
@@ -716,16 +753,13 @@ try{
  console.error("Firebase 초기화 실패:", e);
 }
 const ROOM_KEY = "tagdice_room";
-// 브라우저 탭마다 새 ID를 만드는 기존 방식은 같은 방의 모든 데이터를
-// 하나의 db 객체로 덮어쓰게 만들었습니다. 이제 사용자(브라우저)별로
-// 영속적인 PLAYER_ID를 발급하고 Firebase에서 각 사용자의 시트를 분리합니다.
 const PLAYER_ID_KEY = "tagdice_player_id";
-const PLAYER_ID = localStorage.getItem(PLAYER_ID_KEY) || (()=>{
- const id = crypto.randomUUID();
- localStorage.setItem(PLAYER_ID_KEY, id);
- return id;
-})();
-const CLIENT_ID = PLAYER_ID;
+const AUTH_KEY = "tagdice_temp_auth_v1";
+const LEGACY_PLAYER_ID = localStorage.getItem(PLAYER_ID_KEY) || "";
+let PLAYER_ID = LEGACY_PLAYER_ID || "";
+let currentUser = null;
+let authAuthenticated = false;
+let roomHydrated = false;
 let currentRoom = localStorage.getItem(ROOM_KEY) || "";
 let roomRef = null;
 let applyingRemote = false;
@@ -734,6 +768,95 @@ let currentView = "player";
 function setSyncStatus(text){
  const el=document.getElementById("syncStatus");
  if(el) el.textContent=text;
+}
+
+async function sha256Hex(text){
+ const data=new TextEncoder().encode(String(text));
+ const hash=await crypto.subtle.digest("SHA-256",data);
+ return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function normalizeUsername(v){return String(v||"").trim().toLowerCase();}
+async function makeUserId(username){return "u_"+(await sha256Hex(normalizeUsername(username))).slice(0,32);}
+function showAuthError(msg){const el=document.getElementById("authError");if(el){el.textContent=msg||"";el.style.display=msg?"block":"none";}}
+function setAuthUi(){
+ const gate=document.getElementById("authGate");if(gate) gate.hidden=authAuthenticated;
+ document.body.classList.toggle("auth-locked",!authAuthenticated);
+ const name=document.getElementById("authUserName");if(name)name.textContent=currentUser?.username||"-";
+ const logout=document.getElementById("logoutBtn");if(logout)logout.style.display=authAuthenticated?"inline-block":"none";
+}
+function requireLogin(){if(!authAuthenticated){showAuthError("먼저 로그인해야 합니다.");return false;}return true;}
+async function loadUserRecord(uid){
+ if(!firebaseReady)throw new Error("Firebase에 연결되지 않았습니다.");
+ const snap=await fbdb.ref(`appUsers/${uid}`).once("value");return snap.val()||null;
+}
+async function createTempAccount(username,pin){
+ const uid=await makeUserId(username);
+ const existing=await loadUserRecord(uid);
+ if(existing)throw new Error("이미 존재하는 사용자 이름입니다. 로그인으로 들어가세요.");
+ if(pin.length<4)throw new Error("임시 비밀번호/PIN은 4자 이상이어야 합니다.");
+ const salt=crypto.randomUUID();
+ const passwordHash=await sha256Hex(`${salt}:${pin}`);
+ await fbdb.ref(`appUsers/${uid}`).set({username,salt,passwordHash,createdAt:Date.now(),updatedAt:Date.now(),character:null});
+ return {uid,username};
+}
+async function verifyTempAccount(username,pin){
+ const uid=await makeUserId(username);const record=await loadUserRecord(uid);
+ if(!record)throw new Error("존재하지 않는 계정입니다. '새 임시 계정 만들기'를 먼저 사용하세요.");
+ const passwordHash=await sha256Hex(`${record.salt}:${pin}`);
+ if(passwordHash!==record.passwordHash)throw new Error("비밀번호/PIN이 올바르지 않습니다.");
+ return {uid,username:record.username||username,record};
+}
+async function migrateLegacyLocalCharacter(){
+ if(!LEGACY_PLAYER_ID||LEGACY_PLAYER_ID===PLAYER_ID||!Array.isArray(db.pcs))return;
+ const legacyMine=db.pcs.find(p=>p.ownerId===LEGACY_PLAYER_ID);if(!legacyMine)return;
+ legacyMine.ownerId=PLAYER_ID;
+ db.pcs=db.pcs.filter(p=>p.ownerId!==PLAYER_ID||p===legacyMine);
+ db.activeId=legacyMine.id;localStorage.setItem(KEY,JSON.stringify(db));
+}
+async function saveUserCharacter(p){
+ if(!authAuthenticated||!firebaseReady||!PLAYER_ID||!p)return;
+ try{
+  await fbdb.ref(`appUsers/${PLAYER_ID}/character`).set({...p,ownerId:PLAYER_ID});
+  await fbdb.ref(`appUsers/${PLAYER_ID}/updatedAt`).set(Date.now());
+ }catch(err){console.error("사용자 캐릭터 저장 실패:",err);setSyncStatus("사용자 저장 실패");}
+}
+async function loadUserCharacter(){
+ if(!authAuthenticated||!firebaseReady||!PLAYER_ID)return null;
+ const snap=await fbdb.ref(`appUsers/${PLAYER_ID}/character`).once("value");
+ const p=snap.val();return p?normalizeFamiliar(p):null;
+}
+async function loginOrCreate(create){
+ if(!firebaseReady){showAuthError("Firebase에 연결되지 않아 로그인할 수 없습니다. SDK/네트워크 상태를 확인하세요.");return;}
+ const username=String(document.getElementById("authUsername")?.value||"").trim();
+ const pin=String(document.getElementById("authPin")?.value||"");
+ if(username.length<2){showAuthError("사용자 이름은 2자 이상 입력하세요.");return;}
+ if(!pin){showAuthError("임시 비밀번호/PIN을 입력하세요.");return;}
+ showAuthError("");
+ try{
+  const result=create?await createTempAccount(username,pin):await verifyTempAccount(username,pin);
+  PLAYER_ID=result.uid;currentUser={uid:result.uid,username:result.username};
+  localStorage.setItem(PLAYER_ID_KEY,PLAYER_ID);
+  localStorage.setItem(AUTH_KEY,JSON.stringify({uid:PLAYER_ID,username:currentUser.username}));
+  authAuthenticated=true;
+  await migrateLegacyLocalCharacter();
+  const remote=await loadUserCharacter();
+  if(remote){
+   const idx=db.pcs.findIndex(p=>p.ownerId===PLAYER_ID);
+   if(idx>=0)db.pcs[idx]={...remote,ownerId:PLAYER_ID};else db.pcs.push({...remote,ownerId:PLAYER_ID});
+   db.activeId=db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.activeId;
+  }else if(db.pcs.some(p=>p.ownerId===PLAYER_ID)){
+   await saveUserCharacter(db.pcs.find(p=>p.ownerId===PLAYER_ID));
+  }else{
+   const p=blankPC();p.ownerId=PLAYER_ID;db.pcs.push(p);db.activeId=p.id;await saveUserCharacter(p);
+  }
+  setAuthUi();renderAll();
+  if(currentRoom)await joinRoom(currentRoom);else setTimeout(()=>changeRoom(),100);
+ }catch(err){console.error("로그인 실패:",err);showAuthError(err?.message||"로그인에 실패했습니다.");}
+}
+async function logoutApp(){
+ if(!authAuthenticated)return;
+ try{collect();const p=current();if(p)await saveUserCharacter(p);if(roomRef&&p)await syncPlayerNode(PLAYER_ID);}catch(err){console.error(err);}
+ if(roomRef)roomRef.off();roomRef=null;roomHydrated=false;currentUser=null;authAuthenticated=false;gmUnlocked=false;localStorage.removeItem(AUTH_KEY);setAuthUi();setSyncStatus("");
 }
 
 function ensurePCOwner(p){
@@ -790,70 +913,64 @@ function mergeRoomSnapshot(payload){
  return true;
 }
 
-function joinRoom(room){
- currentRoom = room;
- localStorage.setItem(ROOM_KEY, room);
- const btn=document.getElementById("roomCodeBtn");
- if(btn) btn.textContent = room;
- if(!firebaseReady){ setSyncStatus("동기화 불가 (로컬 전용)"); return; }
- if(roomRef) roomRef.off();
- if(!room){ setSyncStatus(""); roomRef=null; return; }
- setSyncStatus("연결 중…");
- roomRef = fbdb.ref("sessions/" + room);
- roomRef.on("value", snap => {
-  const payload = snap.val();
-  if(!payload){
-   ensureMyCharacter();
-   pushToRoom();
-   setSyncStatus("연결됨 (내 시트 생성)");
-   return;
-  }
- applyingRemote = true;
- const hadMyCharacter = db.pcs.some(p=>p.ownerId===PLAYER_ID);
- mergeRoomSnapshot(payload);
-  db.gmLock = db.gmLock || {enabled:false,pin:"",ownerId:""};
-  gmUnlocked = !!(db.gmLock.enabled && db.gmLock.ownerId===PLAYER_ID);
-  renderAll();
-  applyingRemote = false;
-  if(!hadMyCharacter) pushToRoom();
-  setSyncStatus("연결됨 · 내 시트 분리됨");
- }, err => {
-  setSyncStatus("연결 실패");
-  console.error(err);
- });
+async function joinRoom(room){
+ if(!requireLogin())return;
+ currentRoom=room;localStorage.setItem(ROOM_KEY,room);
+ const btn=document.getElementById("roomCodeBtn");if(btn)btn.textContent=room;
+ if(!firebaseReady){setSyncStatus("동기화 불가 (로컬 전용)");return;}
+ if(roomRef)roomRef.off();
+ if(!room){setSyncStatus("");roomRef=null;roomHydrated=false;return;}
+ setSyncStatus("연결 중…");roomHydrated=false;roomRef=fbdb.ref("sessions/"+room);
+ roomRef.on("value",async snap=>{
+  const payload=snap.val();
+  try{
+   if(!payload){
+    ensureMyCharacter();await saveUserCharacter(current());await pushToRoom();roomHydrated=true;renderAll();setSyncStatus("연결됨 (내 방 캐릭터 생성)");return;
+   }
+   applyingRemote=true;mergeRoomSnapshot(payload);
+   let mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
+   if(!mine){
+    const globalCharacter=await loadUserCharacter();
+    if(globalCharacter){const roomCopy={...globalCharacter,id:globalCharacter.id||crypto.randomUUID(),ownerId:PLAYER_ID};db.pcs.push(roomCopy);db.activeId=roomCopy.id;}
+    else ensureMyCharacter();
+    await pushToRoom();
+   }else if(!roomHydrated)db.activeId=mine.id;
+   db.gmLock=db.gmLock||{enabled:false,pin:"",ownerId:""};gmUnlocked=!!(db.gmLock.enabled&&db.gmLock.ownerId===PLAYER_ID);
+   roomHydrated=true;renderAll();applyingRemote=false;setSyncStatus("연결됨 · 계정 캐릭터 + 방별 캐릭터 저장");
+  }catch(err){applyingRemote=false;console.error(err);setSyncStatus("연결 처리 실패");}
+ },err=>{setSyncStatus("연결 실패");console.error("Realtime Database 오류:",err);});
 }
 
-function syncPlayerNode(ownerId){
- if(!firebaseReady || !roomRef || applyingRemote || !ownerId) return;
- const target=db.pcs.find(p=>p.ownerId===ownerId);
- const updates={};
+async function syncPlayerNode(ownerId){
+ if(!firebaseReady||!roomRef||applyingRemote||!ownerId||!authAuthenticated)return;
+ const target=db.pcs.find(p=>p.ownerId===ownerId);const updates={};
+ const sessionPrefix=`sessions/${currentRoom}`;
  if(target){
-  updates[`players/${ownerId}`]={pcs:[{...target,ownerId}],activeId:target.id,updatedAt:Date.now()};
- }else{
-  updates[`players/${ownerId}`]=null;
- }
- updates.meta={
-  gmLock: db.gmLock || {enabled:false,pin:"",ownerId:""},
-  logs: Array.isArray(db.logs) ? db.logs : [],
-  updatedAt: Date.now()
- };
- roomRef.update(updates).catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
+  const safeTarget={...target,ownerId};
+  updates[`${sessionPrefix}/players/${ownerId}`]={pcs:[safeTarget],activeId:target.id,updatedAt:Date.now()};
+  updates[`appUserLinks/${ownerId}/lastRoom`]=currentRoom;
+  updates[`appUsers/${ownerId}/character`]=safeTarget;
+  updates[`appUsers/${ownerId}/updatedAt`]=Date.now();
+ }else updates[`${sessionPrefix}/players/${ownerId}`]=null;
+ updates[`${sessionPrefix}/meta`]={gmLock:db.gmLock||{enabled:false,pin:"",ownerId:""},logs:Array.isArray(db.logs)?db.logs:[],updatedAt:Date.now()};
+ try{await fbdb.ref().update(updates);}catch(err){setSyncStatus("동기화 실패");console.error("방/사용자 데이터 동기화 실패:",err);}
 }
-function pushToRoom(){
- if(!firebaseReady || !roomRef || applyingRemote) return;
+
+async function pushToRoom(){
+ if(!firebaseReady||!roomRef||applyingRemote||!authAuthenticated)return;
  const p=db.pcs.find(x=>x.id===db.activeId);
- const ownerId=p?.ownerId || PLAYER_ID;
- // 플레이어는 자기 시트만, GM은 현재 선택한 플레이어의 시트만 Firebase에 씁니다.
- if(ownerId!==PLAYER_ID && !gmUnlocked) return;
- syncPlayerNode(ownerId);
+ const ownerId=p?.ownerId||PLAYER_ID;
+ if(ownerId!==PLAYER_ID && !gmUnlocked)return;
+ return syncPlayerNode(ownerId);
 }
 
 async function changeRoom(){
+ if(!requireLogin())return;
  const val = await modalPrompt("함께 쓸 방 코드를 입력하세요.\n(같은 코드를 입력한 사람끼리 실시간으로 파티 데이터를 공유합니다)", currentRoom);
  if(val===null) return;
  const room = val.trim();
  if(!room) return;
- joinRoom(room);
+ await joinRoom(room);
 }
 
 const KEY="tagdice_v2";
@@ -918,7 +1035,7 @@ function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defau
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
 
 const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","familiarName","familiarForm","familiarOrigin","familiarTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
-const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],specialFeature:"magic",magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],familiarName:"",familiarForm:"",familiarOrigin:"",familiarTag:"",familiarWounds:Array(3).fill(false),familiarUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
+const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID || LEGACY_PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],specialFeature:"magic",magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],familiarName:"",familiarForm:"",familiarOrigin:"",familiarTag:"",familiarWounds:Array(3).fill(false),familiarUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
 function normalizeFamiliar(p){
  if(!p) return p;
  p.specialFeature=["magic","familiar"].includes(p.specialFeature) ? p.specialFeature : "magic";
@@ -929,7 +1046,7 @@ function normalizeFamiliar(p){
  while(p.familiarUses.length<3) p.familiarUses.push(false);
  return p;
 }
-let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
+let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
 db.pcs = Array.isArray(db.pcs) ? db.pcs : [];
 // 기존 로컬 저장 데이터에는 ownerId가 없으므로 현재 브라우저의 소유권으로 이전합니다.
 db.pcs.forEach(ensurePCOwner);
@@ -939,8 +1056,8 @@ if(owned.length>1){
  const keepId = db.activeId && owned.some(p=>p.id===db.activeId) ? db.activeId : owned[0].id;
  db.pcs = db.pcs.filter(p=>p.ownerId!==PLAYER_ID || p.id===keepId);
 }
-if(!db.pcs.some(p=>p.ownerId===PLAYER_ID)) ensureMyCharacter();
-db.activeId = db.activeId && db.pcs.some(p=>p.id===db.activeId) ? db.activeId : db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id || db.pcs[0].id;
+if(PLAYER_ID && !db.pcs.some(p=>p.ownerId===PLAYER_ID)) ensureMyCharacter();
+db.activeId = db.activeId && db.pcs.some(p=>p.id===db.activeId) ? db.activeId : (db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null);
 db.gmLock = db.gmLock || {enabled:false,pin:""};
 let gmUnlocked = false;
 db.pcs.forEach(p=>{
@@ -974,7 +1091,7 @@ db.pcs.forEach(p=>{
   }
 });
 let current=()=>db.pcs.find(p=>p.id===db.activeId) || db.pcs.find(p=>p.ownerId===PLAYER_ID) || db.pcs[0];
-function canEditCharacter(p){ return !!p && (p.ownerId===PLAYER_ID || gmUnlocked); }
+function canEditCharacter(p){ return authAuthenticated && !!p && (p.ownerId===PLAYER_ID || gmUnlocked); }
 function canEditCurrent(){ return canEditCharacter(current()); }
 
 /* persist(): full save + full structural re-render (rebuilds the tag/erosion/
@@ -986,8 +1103,9 @@ function canEditCurrent(){ return canEditCharacter(current()); }
    persistQuiet(): just writes localStorage. Pair it with a small, targeted
    DOM update (or none) for anything typed into a field that already shows
    what was typed on its own. */
-function persist(){localStorage.setItem(KEY,JSON.stringify(db));renderAll();pushToRoom()}
+function persist(){if(!authAuthenticated)return;localStorage.setItem(KEY,JSON.stringify(db));renderAll();pushToRoom()}
 function persistQuiet(){
+ if(!authAuthenticated)return;
  try{ localStorage.setItem(KEY,JSON.stringify(db)); }
  catch(e){ modalAlert("저장 공간이 부족합니다. 초상화 이미지가 너무 많거나 커서 브라우저 저장 한도를 넘었을 수 있어요."); }
  pushToRoom();
@@ -1015,6 +1133,7 @@ function populateFields(){
  document.querySelectorAll('input[name="magicForm"]').forEach(r=>{ r.checked = (r.value===(p.magicForm||"")); });
 }
 async function mode(x){
+ if(!requireLogin())return;
  if(x==="gm"){
   const lock=db.gmLock||{enabled:false,pin:"",ownerId:""};
   if(lock.enabled && lock.ownerId && lock.ownerId!==PLAYER_ID){
@@ -1073,6 +1192,7 @@ async function toggleGmLock(){
  }catch(err){ console.error(err); await modalAlert("GM 권한 설정에 실패했습니다."); }
 }
 function setActive(id){
+ if(!requireLogin())return;
  const p=db.pcs.find(x=>x.id===id);
  if(!p) return;
  collect();
@@ -1417,6 +1537,7 @@ function renderGM(){
  document.getElementById("log").innerHTML=db.logs.slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
 function addPC(){
+ if(!requireLogin())return;
  const mine=myPCs();
  if(mine.length>=1){
   modalAlert("한 사람당 캐릭터 시트는 1개만 사용할 수 있습니다.\n현재 시트를 계속 사용해 주세요.");
@@ -1458,15 +1579,22 @@ async function exportImage(){
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function renderAll(){renderPlayer();renderGM();renderSharedLog()}
-renderAll();
-
-// 방 코드가 저장돼 있으면 자동으로 재접속, 없으면 새로 물어봄
-if(currentRoom){
- document.getElementById("roomCodeBtn").textContent = currentRoom;
- joinRoom(currentRoom);
-}else{
- setTimeout(()=>{ changeRoom(); }, 300);
+setAuthUi();
+async function restoreTempLogin(){
+ try{
+  const cached=JSON.parse(localStorage.getItem(AUTH_KEY)||"null");if(!cached?.uid||!firebaseReady)return;
+  const record=await loadUserRecord(cached.uid);if(!record||!record.username)return;
+  PLAYER_ID=cached.uid;currentUser={uid:cached.uid,username:record.username};authAuthenticated=true;
+  localStorage.setItem(PLAYER_ID_KEY,PLAYER_ID);
+  const remote=await loadUserCharacter();
+  if(remote){const idx=db.pcs.findIndex(p=>p.ownerId===PLAYER_ID);if(idx>=0)db.pcs[idx]={...remote,ownerId:PLAYER_ID};else db.pcs.push({...remote,ownerId:PLAYER_ID});db.activeId=db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.activeId;}
+  else{const local=db.pcs.find(p=>p.ownerId===PLAYER_ID);if(local)await saveUserCharacter(local);}
+  setAuthUi();renderAll();if(currentRoom)await joinRoom(currentRoom);else setTimeout(()=>changeRoom(),100);
+ }catch(err){console.warn("자동 로그인 복구 실패:",err);}
 }
+restoreTempLogin();
+document.getElementById("authUsername")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginOrCreate(false);});
+document.getElementById("authPin")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginOrCreate(false);});
 </script>
 </body>
 </html>
