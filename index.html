@@ -22,7 +22,7 @@ body{margin:0;background:#d5c9ad;color:var(--ink);font-family:"Noto Serif KR",se
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer}
 .app{min-height:100vh}
-.topbar{position:sticky;top:0;z-index:20;background:rgba(243,234,211,.97);border-bottom:1px solid var(--line);box-shadow:0 2px 10px var(--shadow)}
+.topbar{position:sticky;top:0;z-index:160;background:rgba(243,234,211,.97);border-bottom:1px solid var(--line);box-shadow:0 2px 10px var(--shadow)}
 .topbar-inner{max-width:1420px;margin:auto;padding:12px 18px;display:flex;gap:14px;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--red);letter-spacing:.05em}
 .brand-mark{width:38px;height:38px;border:2px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-size:19px}
@@ -69,7 +69,7 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .shared-log-wrap{background:var(--paper2);border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:14px}
 .shared-log-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800;color:var(--red);font-size:14px;margin-bottom:2px}
 .shared-log-wrap .log{height:120px;max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
-.modal-overlay{position:fixed;inset:0;background:rgba(30,20,10,.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal-overlay{position:fixed;inset:0;background:rgba(30,20,10,.55);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
 .modal-box{background:var(--paper);border:2px solid #46351f;box-shadow:0 10px 40px rgba(0,0,0,.4);padding:20px;max-width:380px;width:100%}
 .modal-message{white-space:pre-line;margin-bottom:14px;line-height:1.6;font-size:14px}
 .modal-input-wrap{margin-bottom:14px}
@@ -77,6 +77,25 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .modal-buttons{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .modal-buttons button{border:1px solid var(--line);background:var(--paper2);border-radius:6px;padding:7px 14px;font-size:13px}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* ---- 임시 로그인: 우측 상단 버튼 + 미로그인 차단 오버레이 ---- */
+.authbar{display:flex;align-items:center;gap:8px;margin-left:auto}
+.authbar .who{font-size:12px;color:#9a7d4d;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.login-btn{border:1px solid var(--red);background:var(--red);color:#fff8e9;border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:800;letter-spacing:.02em}
+.login-btn.logged-in{background:var(--paper2);color:var(--ink);border-color:var(--line);font-weight:700}
+.login-gate{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(55,42,22,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.login-gate.show{display:flex}
+.login-gate-card{background:var(--paper);border:2px solid #46351f;box-shadow:0 12px 44px rgba(0,0,0,.42);padding:24px 26px;max-width:420px;width:100%;text-align:center;border-radius:2px}
+.login-gate-card .lg-mark{width:44px;height:44px;margin:0 auto 10px;border:2px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-size:20px;color:var(--red)}
+.login-gate-card h3{margin:0 0 8px;color:var(--red);font-size:19px;letter-spacing:.05em}
+.login-gate-card p{margin:0 0 16px;font-size:13px;line-height:1.7;color:#6b5735}
+.login-gate-card .lg-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.login-gate-card button{border:1px solid var(--line);background:var(--paper2);border-radius:7px;padding:9px 18px;font-size:13.5px}
+.login-gate-card button.primary{background:var(--red);color:#fff8e9;border-color:var(--red);font-weight:700}
+.modal-form-wrap{margin-bottom:14px;display:grid;gap:10px}
+.modal-form-wrap .mf-row{display:grid;gap:4px}
+.modal-form-wrap label{font-size:12px;color:#9a7d4d}
+.modal-form-wrap input{width:100%;border:1px solid var(--line);padding:8px;background:var(--white);border-radius:4px}
+.modal-form-wrap .mf-hint{font-size:11px;color:#9a7d4d;line-height:1.5}
 
 /* ============================================================
    PDF-matching "paper" character sheet (front + back pages)
@@ -440,9 +459,9 @@ table.stuff-table input{width:100%}
   <button class="tbtn" id="roomCodeBtn" onclick="changeRoom()">-</button>
   <span id="syncStatus" class="muted" style="min-width:70px;display:inline-block"></span>
  </div>
- <div class="charbar">
-  <label>임시 로그인</label>
-  <button class="tbtn" id="tempLoginBtn" onclick="manageTemporaryLogin()">로그인</button>
+ <div class="authbar">
+  <span id="authWho" class="who"></span>
+  <button class="login-btn" id="tempLoginBtn" onclick="manageTemporaryLogin()">로그인</button>
  </div>
 </div></header>
 
@@ -453,6 +472,7 @@ table.stuff-table input{width:100%}
   <label>캐릭터 보기</label>
   <select id="charSelect" onchange="setActive(this.value)"></select>
   <button class="tbtn" onclick="addMyCharacter()">＋ 새 캐릭터</button>
+  <button class="tbtn" id="claimBtn" style="display:none" onclick="claimCharacter()">🔗 내 캐릭터로 가져오기</button>
   <button class="tbtn" onclick="resetCharacter()">초기화</button>
   <button class="tbtn danger" onclick="deleteCharacter()">삭제</button>
  </div>
@@ -682,10 +702,24 @@ table.stuff-table input{width:100%}
 </main>
 </div>
 
+<div id="loginGate" class="login-gate">
+ <div class="login-gate-card">
+  <div class="lg-mark">✦</div>
+  <h3>TAG &amp; DICE</h3>
+  <p>임시 로그인을 해야 캐릭터 시트를 사용할 수 있습니다.<br>
+     로그인하면 <b>내 캐릭터</b>와 <b>같은 방에 있는 캐릭터들</b>을 함께 불러옵니다.<br>
+     지금 화면은 미리보기(로컬 화면)이며 편집·동기화가 되지 않습니다.</p>
+  <div class="lg-actions">
+   <button class="primary" onclick="manageTemporaryLogin()">로그인</button>
+  </div>
+ </div>
+</div>
+
 <div id="modalOverlay" class="modal-overlay" style="display:none">
  <div class="modal-box">
   <div id="modalMessage" class="modal-message"></div>
   <div id="modalInputWrap" class="modal-input-wrap" style="display:none"><input id="modalInput" type="text"></div>
+  <div id="modalFormWrap" class="modal-form-wrap" style="display:none"></div>
   <div id="modalButtons" class="modal-buttons"></div>
  </div>
 </div>
@@ -726,6 +760,26 @@ const ROOM_SHEET_CACHE_PREFIX = "tagdice_room_sheet_v1";
 // 영속적인 PLAYER_ID를 발급하고 Firebase에서 각 사용자의 시트를 분리합니다.
 const PLAYER_ID_KEY = "tagdice_player_id";
 const TEMP_LOGIN_KEY = "tagdice_temp_login";
+// 로그인 전(게스트)에 쓰던 ID를 기억해 두었다가, 첫 로그인 때 그 시트의
+// 소유권을 새 계정으로 넘겨 주기 위한 키입니다.
+const LEGACY_OWNER_KEY = "tagdice_legacy_owner";
+// 이 브라우저에서 써 온 소유자 ID 목록(게스트 ID, 예전 계정 ID 등).
+// 로그인 뒤에 "예전에 만든 내 캐릭터"를 새 계정 소유로 자동 연결할 때 씁니다.
+const KNOWN_OWNERS_KEY = "tagdice_known_owners";
+function readKnownOwnerIds(){
+ try{
+  const list=JSON.parse(localStorage.getItem(KNOWN_OWNERS_KEY)||"[]");
+  return Array.isArray(list) ? list.filter(x=>typeof x==="string") : [];
+ }catch(e){ return []; }
+}
+function rememberOwnerId(id){
+ if(!id) return;
+ const list=readKnownOwnerIds();
+ if(list.includes(id)) return;
+ list.push(id);
+ try{ localStorage.setItem(KNOWN_OWNERS_KEY,JSON.stringify(list.slice(-20))); }catch(e){}
+}
+function isAccountId(id){ return typeof id==="string" && id.startsWith("user_"); }
 function loadTemporaryLogin(){
  try{
   const saved=JSON.parse(localStorage.getItem(TEMP_LOGIN_KEY)||"null");
@@ -739,6 +793,10 @@ const PLAYER_ID = TEMP_LOGIN?.id || localStorage.getItem(PLAYER_ID_KEY) || (()=>
  return id;
 })();
 const CLIENT_ID = PLAYER_ID;
+// 이 브라우저의 게스트 ID와 현재 ID를 "내 ID 목록"에 기록해 둡니다.
+rememberOwnerId(localStorage.getItem(PLAYER_ID_KEY));
+rememberOwnerId(PLAYER_ID);
+rememberOwnerId(localStorage.getItem(LEGACY_OWNER_KEY));
 let currentRoom = localStorage.getItem(ROOM_KEY) || "";
 let roomRef = null;
 let applyingRemote = false;
@@ -781,14 +839,30 @@ function ensureMyCharacter(){
  return p;
 }
 
-function roomSheetCacheKey(room){ return `${ROOM_SHEET_CACHE_PREFIX}:${PLAYER_ID}:${encodeURIComponent(room||"")}`; }
+function roomSheetCacheKeyFor(ownerId,room){ return `${ROOM_SHEET_CACHE_PREFIX}:${ownerId}:${encodeURIComponent(room||"")}`; }
+function roomSheetCacheKey(room){ return roomSheetCacheKeyFor(PLAYER_ID,room); }
 function readRoomSheetCache(room){
  if(!room) return null;
- try{
-  const saved=JSON.parse(localStorage.getItem(roomSheetCacheKey(room))||"null");
-  const pc=saved?.pc;
-  return pc && pc.ownerId===PLAYER_ID ? pc : null;
- }catch(e){ return null; }
+ const tryKey=(ownerId)=>{
+  try{
+   const saved=JSON.parse(localStorage.getItem(roomSheetCacheKeyFor(ownerId,room))||"null");
+   return saved?.pc || null;
+  }catch(e){ return null; }
+ };
+ const own=tryKey(PLAYER_ID);
+ if(own && own.ownerId===PLAYER_ID) return own;
+ // 로그인 전(게스트)이나 예전 ID로 저장해 둔 이 방의 시트가 있으면
+ // 지금 계정의 시트로 이어받습니다.
+ for(const oldId of readKnownOwnerIds()){
+  if(oldId===PLAYER_ID) continue;
+  const pc=tryKey(oldId);
+  if(pc){
+   pc.ownerId=PLAYER_ID;
+   pc.ownerNickname=TEMP_LOGIN?.nickname||pc.ownerNickname||"게스트";
+   return pc;
+  }
+ }
+ return null;
 }
 function cacheMyRoomSheet(){
  if(!currentRoom || !db?.pcs) return;
@@ -805,6 +879,101 @@ function loadRoomSheet(room){
  db.activeId=db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;
  renderedPlayerId=null;
 }
+/* ---------- 로그인 계정 ↔ 캐릭터 연동 ----------
+   로그인하기 전(게스트)이나 예전 ID로 만든 캐릭터는 소유자 ID가 지금
+   계정과 달라서 "읽기 전용"으로 보입니다. 아래 로직이 그런 시트를 지금
+   로그인한 계정 소유로 이어붙여, 본인 캐릭터를 그대로 쓸 수 있게 합니다. */
+function sheetIsBlank(p){
+ if(!p) return true;
+ const base=blankPC();
+ const skip=new Set(["id","ownerId","ownerNickname"]);
+ return Object.keys(base).every(k=>skip.has(k) || JSON.stringify(p[k]??base[k])===JSON.stringify(base[k]));
+}
+/* 이 캐릭터를 내 것으로 가져올 수 있는가?
+   - 이 브라우저에서 쓰던 ID(게스트/예전 계정)로 만든 시트
+   - 아직 아무 계정에도 연결되지 않은 게스트 시트
+   - 소유자 닉네임이 지금 로그인한 닉네임과 같은 시트
+   다른 사람이 로그인한 계정의 시트는 가져올 수 없습니다. */
+function canClaimCharacter(p){
+ if(!isLoggedIn() || !p || p.ownerId===PLAYER_ID) return false;
+ if(readKnownOwnerIds().includes(p.ownerId)) return true;
+ if(!isAccountId(p.ownerId)) return true;
+ if(p.ownerNickname && p.ownerNickname===TEMP_LOGIN.nickname) return true;
+ return false;
+}
+function takeOverSheet(p){
+ const previousOwner=p.ownerId;
+ p.ownerId=PLAYER_ID;
+ p.ownerNickname=TEMP_LOGIN?.nickname||"게스트";
+ rememberOwnerId(previousOwner);
+ db.activeId=p.id;
+ renderedPlayerId=null;
+ return previousOwner;
+}
+/* 자동 이어받기는 "확실히 내 것"인 경우에만 합니다.
+   (이 브라우저에서 쓰던 ID이거나, 소유자 닉네임이 내 닉네임과 같은 게스트 시트)
+   같은 방에 있는 다른 사람의 게스트 시트를 실수로 가져가지 않도록 하기 위함입니다. */
+function canAutoClaim(p){
+ if(!isLoggedIn() || !p || p.ownerId===PLAYER_ID) return false;
+ if(readKnownOwnerIds().includes(p.ownerId)) return true;
+ if(!isAccountId(p.ownerId) && p.ownerNickname && p.ownerNickname===TEMP_LOGIN.nickname) return true;
+ return false;
+}
+/* 접속/로그인 직후, 내 것으로 볼 수 있는 시트를 자동으로 이어받습니다. */
+function autoClaimMySheets(){
+ if(!isLoggedIn() || !Array.isArray(db.pcs)) return null;
+ const candidate=db.pcs.find(p=>canAutoClaim(p));
+ if(!candidate) return null;
+ const mine=db.pcs.filter(p=>p.ownerId===PLAYER_ID);
+ // 자동으로 만들어진 빈 시트만 있는 경우에는 그 빈 시트를 지우고 이어받습니다.
+ if(mine.length && !mine.every(sheetIsBlank)) return null;
+ const removedIds=mine.map(p=>p.id);
+ db.pcs=db.pcs.filter(p=>!removedIds.includes(p.id));
+ const previousOwner=takeOverSheet(candidate);
+ return {previousOwner,pc:candidate};
+}
+/* 방(Firebase)에서도 소유자 노드를 옮겨 줍니다. */
+function pushOwnershipChange(previousOwner){
+ if(!firebaseReady || !roomRef || applyingRemote) return;
+ const mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
+ const updates={};
+ if(previousOwner && previousOwner!==PLAYER_ID) updates[`players/${previousOwner}`]=null;
+ if(mine){
+  updates[`players/${PLAYER_ID}`]={profile:{id:PLAYER_ID,nickname:mine.ownerNickname||TEMP_LOGIN?.nickname||"게스트"},pcs:[{...mine,ownerId:PLAYER_ID}],activeId:mine.id,updatedAt:Date.now()};
+ }
+ updates.meta={
+  gmLock: db.gmLock || {enabled:false,pin:"",ownerId:""},
+  logs: Array.isArray(db.logs) ? db.logs : [],
+  updatedAt: Date.now()
+ };
+ roomRef.update(updates).catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
+}
+/* 툴바의 "내 캐릭터로 가져오기" 버튼 */
+async function claimCharacter(){
+ const p=current();
+ if(!isLoggedIn()){ await modalAlert("먼저 로그인해 주세요."); return; }
+ if(!p || p.ownerId===PLAYER_ID){ await modalAlert("이미 내 캐릭터입니다."); return; }
+ if(!canClaimCharacter(p)){ await modalAlert("다른 로그인 사용자의 캐릭터는 가져올 수 없습니다."); return; }
+ const mine=db.pcs.filter(x=>x.ownerId===PLAYER_ID);
+ const blockers=mine.filter(x=>!sheetIsBlank(x));
+ if(blockers.length){
+  const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터를 내 캐릭터로 가져올까요?\n한 계정은 시트를 1장만 가질 수 있어서, 지금 쓰던 내 시트 '${blockers[0].name||"이름 없음"}'는 삭제됩니다.`);
+  if(!ok) return;
+ }else{
+  const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터를 내 캐릭터로 가져올까요?\n이후 이 계정으로 로그인하면 어디서든 이 시트를 편집할 수 있습니다.`);
+  if(!ok) return;
+ }
+ collect();
+ const removedIds=mine.map(x=>x.id);
+ db.pcs=db.pcs.filter(x=>!removedIds.includes(x.id));
+ const previousOwner=takeOverSheet(p);
+ localStorage.setItem(KEY,JSON.stringify(db));
+ cacheMyRoomSheet();
+ renderAll();
+ pushOwnershipChange(previousOwner);
+ await modalAlert("이제 이 캐릭터는 내 계정 소유입니다. 바로 편집할 수 있어요.");
+}
+
 function ensureRoomCharacter(room){
  const mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
  if(mine) return false;
@@ -858,12 +1027,15 @@ function mergeRoomSnapshot(payload){
 }
 
 function joinRoom(room){
+ if(!isLoggedIn()){ setSyncStatus("로그인 필요"); return; }
  collect();
  cacheMyRoomSheet();
  currentRoom = room;
  localStorage.setItem(ROOM_KEY, room);
  const btn=document.getElementById("roomCodeBtn");
  if(btn) btn.textContent = room;
+ setTemporaryLoginUI();
+ watchFirebaseConnection();
  if(!firebaseReady){
   loadRoomSheet(room);
   renderAll();
@@ -875,6 +1047,7 @@ function joinRoom(room){
  setSyncStatus("연결 중…");
  const requestedRef=fbdb.ref("sessions/" + room);
  roomRef = requestedRef;
+ let firstSnapshot=true;
  requestedRef.on("value", snap => {
   // 방을 빠르게 바꿨을 때 이전 방에서 늦게 도착한 응답은 무시합니다.
   if(currentRoom!==room || roomRef!==requestedRef) return;
@@ -889,14 +1062,24 @@ function joinRoom(room){
   }
   applyingRemote = true;
   mergeRoomSnapshot(payload);
+  // 로그인 전(게스트)이나 예전 ID로 이 방에 올려 둔 내 캐릭터가 있으면
+  // 지금 계정 소유로 이어받아 바로 편집할 수 있게 합니다.
+  const claimed=autoClaimMySheets();
   const createdOrRestored=ensureRoomCharacter(room);
+  // 방에 처음 들어온 순간에는 항상 내 캐릭터가 선택된 상태로 시작합니다.
+  if(firstSnapshot){
+   const mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
+   if(mine && mine.id!==db.activeId){ db.activeId=mine.id; renderedPlayerId=null; }
+   firstSnapshot=false;
+  }
   db.gmLock = db.gmLock || {enabled:false,pin:"",ownerId:""};
   gmUnlocked = !!(db.gmLock.enabled && db.gmLock.ownerId===PLAYER_ID);
   renderAll();
   applyingRemote = false;
   cacheMyRoomSheet();
-  if(createdOrRestored) pushToRoom();
-  setSyncStatus(createdOrRestored ? "연결됨 · 이 방의 내 시트 준비" : "연결됨 · 이 방의 내 시트 불러옴");
+  if(claimed) pushOwnershipChange(claimed.previousOwner);
+  else if(createdOrRestored) pushToRoom();
+  setSyncStatus(claimed ? "연결됨 · 내 캐릭터 연결 완료" : (createdOrRestored ? "연결됨 · 이 방의 내 시트 준비" : "연결됨 · 이 방의 내 시트 불러옴"));
  }, err => {
   if(currentRoom!==room || roomRef!==requestedRef) return;
   setSyncStatus("연결 실패");
@@ -930,11 +1113,16 @@ function pushToRoom(){
 }
 
 async function changeRoom(){
+ if(!isLoggedIn()){
+  await modalAlert("먼저 로그인해 주세요.\n오른쪽 위 '로그인' 버튼으로 임시 로그인할 수 있습니다.");
+  return;
+ }
  const val = await modalPrompt("함께 쓸 방 코드를 입력하세요.\n(같은 코드를 입력한 사람끼리 실시간으로 파티 데이터를 공유합니다)", currentRoom);
  if(val===null) return;
  const room = val.trim();
  if(!room) return;
  joinRoom(room);
+ setTemporaryLoginUI();
 }
 
 const KEY="tagdice_v2";
@@ -946,18 +1134,46 @@ const KEY="tagdice_v2";
    them (confirm()/prompt() resolve as if the user hit Cancel, with nothing
    ever shown). That looked exactly like "the delete button doesn't work".
    These in-page replacements work the same everywhere. */
-function showModal({message,type="alert",defaultValue="",options=null}){
+function showModal({message,type="alert",defaultValue="",options=null,fields=null,okLabel="확인"}){
  return new Promise(resolve=>{
   const overlay=document.getElementById("modalOverlay");
   const msgEl=document.getElementById("modalMessage");
   const inputWrap=document.getElementById("modalInputWrap");
   const inputEl=document.getElementById("modalInput");
+  const formWrap=document.getElementById("modalFormWrap");
   const btnWrap=document.getElementById("modalButtons");
   msgEl.textContent=message;
   btnWrap.innerHTML="";
   inputWrap.style.display="none";
-  function close(result){ overlay.style.display="none"; overlay.onclick=null; resolve(result); }
-  if(type==="prompt"){
+  if(formWrap){ formWrap.style.display="none"; formWrap.innerHTML=""; }
+  function close(result){ overlay.style.display="none"; overlay.onclick=null; if(formWrap){formWrap.style.display="none";formWrap.innerHTML="";} resolve(result); }
+  if(type==="form"){
+   // 여러 입력칸을 한 번에 받는 모달(임시 로그인 등). 결과는 {key:value} 객체.
+   formWrap.style.display="grid";
+   const inputs={};
+   (fields||[]).forEach(f=>{
+    const row=document.createElement("div"); row.className="mf-row";
+    const lab=document.createElement("label"); lab.textContent=f.label||f.key; row.appendChild(lab);
+    const inp=document.createElement("input");
+    inp.type=f.type||"text";
+    inp.value=f.value||"";
+    if(f.placeholder) inp.placeholder=f.placeholder;
+    if(f.maxLength) inp.maxLength=f.maxLength;
+    row.appendChild(inp);
+    if(f.hint){ const h=document.createElement("div"); h.className="mf-hint"; h.textContent=f.hint; row.appendChild(h); }
+    formWrap.appendChild(row);
+    inputs[f.key]=inp;
+   });
+   const submit=()=>{ const out={}; Object.keys(inputs).forEach(k=>out[k]=inputs[k].value); close(out); };
+   const ok=document.createElement("button"); ok.className="primary"; ok.textContent=okLabel; ok.onclick=submit;
+   const cancel=document.createElement("button"); cancel.textContent="취소"; cancel.onclick=()=>close(null);
+   btnWrap.append(cancel,ok);
+   formWrap.onkeydown=(e)=>{ if(e.key==="Enter"){ e.preventDefault(); submit(); } };
+   overlay.onclick=(e)=>{ if(e.target===overlay) close(null); };
+   overlay.style.display="flex";
+   const first=Object.values(inputs)[0];
+   if(first) setTimeout(()=>first.focus(),0);
+  }else if(type==="prompt"){
    inputWrap.style.display="block";
    inputEl.value=defaultValue;
    const ok=document.createElement("button"); ok.className="primary"; ok.textContent="확인"; ok.onclick=()=>close(inputEl.value);
@@ -997,47 +1213,140 @@ function modalAlert(msg){ return showModal({message:msg,type:"alert"}); }
 function modalConfirm(msg){ return showModal({message:msg,type:"confirm"}); }
 function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defaultValue:def||""}); }
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
+function modalForm(msg,fields,okLabel){ return showModal({message:msg,type:"form",fields,okLabel:okLabel||"확인"}); }
+
+/* ---------- 임시 로그인 ----------
+   닉네임(+선택 PIN)만으로 쓰는 가벼운 계정입니다. 계정 ID는 닉네임에서
+   결정적으로(해시로) 만들기 때문에, 같은 닉네임으로 로그인하면 어느
+   브라우저에서든 같은 사용자로 취급되어 그 사용자의 시트를 그대로
+   불러옵니다. 로그인해야만 편집/동기화가 열리고, 로그인 전에는 화면만
+   로컬 미리보기로 보여 줍니다. */
+const ACCOUNTS_LOCAL_KEY="tagdice_accounts_local_v1";
+function isLoggedIn(){ return !!(TEMP_LOGIN && TEMP_LOGIN.id && TEMP_LOGIN.nickname); }
+function hashString(str){
+ // 보안용이 아니라 "같은 닉네임 → 같은 ID"를 만들기 위한 결정적 해시입니다.
+ let h1=0x811c9dc5, h2=0x1000193;
+ for(let i=0;i<str.length;i++){
+  const c=str.charCodeAt(i);
+  h1=(h1^c)>>>0; h1=Math.imul(h1,16777619)>>>0;
+  h2=(h2+c)>>>0; h2=Math.imul(h2,2246822519)>>>0; h2=(h2^(h2>>>13))>>>0;
+ }
+ return h1.toString(16).padStart(8,"0")+h2.toString(16).padStart(8,"0");
+}
+function normalizeNickname(v){ return String(v||"").trim().replace(/\s+/g," ").slice(0,16); }
+function accountIdFor(nickname){ return "user_"+hashString("tagdice-account:"+normalizeNickname(nickname).toLowerCase()); }
+function pinDigest(id,pin){ return pin ? hashString("tagdice-pin:"+id+":"+pin) : ""; }
+function readLocalAccounts(){
+ try{ return JSON.parse(localStorage.getItem(ACCOUNTS_LOCAL_KEY)||"{}")||{}; }catch(e){ return {}; }
+}
+function writeLocalAccount(id,record){
+ const all=readLocalAccounts();
+ all[id]=record;
+ try{ localStorage.setItem(ACCOUNTS_LOCAL_KEY,JSON.stringify(all)); }catch(e){}
+}
+async function fetchAccount(id){
+ if(firebaseReady){
+  try{
+   const snap=await fbdb.ref("accounts/"+id).once("value");
+   const remote=snap.val();
+   if(remote) return remote;
+  }catch(e){ console.warn("계정 조회 실패, 로컬 기록으로 대체합니다.",e); }
+ }
+ return readLocalAccounts()[id]||null;
+}
+async function saveAccount(id,record){
+ writeLocalAccount(id,record);
+ if(firebaseReady){
+  try{ await fbdb.ref("accounts/"+id).set(record); }
+  catch(e){ console.warn("계정 저장 실패(로컬에는 저장됨).",e); }
+ }
+}
+/* 닉네임/PIN을 확인하고, 없으면 새로 만든 뒤 계정 ID를 돌려줍니다. */
+async function verifyOrCreateAccount(nickname,pin){
+ const id=accountIdFor(nickname);
+ const account=await fetchAccount(id);
+ const digest=pinDigest(id,pin);
+ if(account){
+  if(account.pin && account.pin!==digest){
+   return {ok:false,error:pin ? "PIN이 올바르지 않습니다." : "이 닉네임에는 PIN이 설정되어 있습니다. PIN을 입력해 주세요."};
+  }
+  const next={nickname,pin:account.pin||digest,createdAt:account.createdAt||Date.now(),updatedAt:Date.now()};
+  await saveAccount(id,next);
+  return {ok:true,id,created:false};
+ }
+ await saveAccount(id,{nickname,pin:digest,createdAt:Date.now(),updatedAt:Date.now()});
+ return {ok:true,id,created:true};
+}
 
 function setTemporaryLoginUI(){
  const btn=document.getElementById("tempLoginBtn");
- if(!btn) return;
- btn.textContent=TEMP_LOGIN ? `${TEMP_LOGIN.nickname} ▾` : "로그인";
- btn.title=TEMP_LOGIN ? "임시 로그인 관리" : "임시 로그인";
+ const who=document.getElementById("authWho");
+ if(btn){
+  btn.textContent=isLoggedIn() ? `${TEMP_LOGIN.nickname} ▾` : "로그인";
+  btn.title=isLoggedIn() ? "임시 로그인 관리" : "임시 로그인 (로그인해야 시트를 사용할 수 있습니다)";
+  btn.classList.toggle("logged-in",isLoggedIn());
+ }
+ if(who) who.textContent=isLoggedIn() ? (currentRoom ? `방 ${currentRoom}` : "방 미접속") : "로그인 필요";
 }
-async function startTemporaryLogin(makeNewIdentity=false){
- const value=await modalPrompt("임시 로그인\n닉네임만 사용하며 비밀번호나 실제 계정은 만들지 않습니다.", TEMP_LOGIN?.nickname||"");
- if(value===null) return false;
- const nickname=value.trim().replace(/\s+/g," ").slice(0,16);
- if(!nickname){ await modalAlert("닉네임을 입력해 주세요."); return false; }
- const id=makeNewIdentity ? crypto.randomUUID() : (TEMP_LOGIN?.id || PLAYER_ID);
- TEMP_LOGIN={id,nickname};
- localStorage.setItem(TEMP_LOGIN_KEY,JSON.stringify(TEMP_LOGIN));
- localStorage.setItem(PLAYER_ID_KEY,id);
- if(id!==PLAYER_ID){ location.reload(); return true; }
- db.pcs.filter(p=>p.ownerId===PLAYER_ID).forEach(p=>{ p.ownerNickname=nickname; });
- persistQuiet();
+/* 로그인 여부에 따라 화면 전체를 잠그거나 풀어 줍니다. */
+function applyLoginGate(){
+ const gate=document.getElementById("loginGate");
+ if(gate) gate.classList.toggle("show",!isLoggedIn());
+ document.body.classList.toggle("logged-out",!isLoggedIn());
  setTemporaryLoginUI();
- renderGM();
+ renderPlayer();
+}
+async function openLoginDialog(){
+ const result=await modalForm(
+  "임시 로그인\n닉네임으로만 접속하는 가벼운 로그인입니다.\n같은 닉네임으로 로그인하면 그 사용자의 캐릭터를 다시 불러옵니다.",
+  [
+   {key:"nickname",label:"닉네임 (필수)",value:TEMP_LOGIN?.nickname||"",maxLength:16,placeholder:"예: 루카"},
+   {key:"pin",label:"PIN (선택)",type:"password",maxLength:12,hint:"PIN을 정해두면 다른 사람이 같은 닉네임으로 접속할 수 없습니다."},
+   {key:"room",label:"방 코드 (선택)",value:currentRoom||"",placeholder:"같은 코드를 쓰는 사람끼리 파티 공유",hint:"비워두면 이 브라우저에만 저장되는 혼자 쓰기 모드로 시작합니다."}
+  ],
+  "로그인"
+ );
+ if(result===null) return false;
+ const nickname=normalizeNickname(result.nickname);
+ if(!nickname){ await modalAlert("닉네임을 입력해 주세요."); return openLoginDialog(); }
+ const pin=String(result.pin||"").trim();
+ const room=String(result.room||"").trim();
+ setSyncStatus("로그인 확인 중…");
+ const check=await verifyOrCreateAccount(nickname,pin);
+ if(!check.ok){
+  setSyncStatus("");
+  await modalAlert(check.error);
+  return openLoginDialog();
+ }
+ if(PLAYER_ID && PLAYER_ID!==check.id) localStorage.setItem(LEGACY_OWNER_KEY,PLAYER_ID);
+ rememberOwnerId(PLAYER_ID);
+ TEMP_LOGIN={id:check.id,nickname};
+ localStorage.setItem(TEMP_LOGIN_KEY,JSON.stringify(TEMP_LOGIN));
+ if(room) localStorage.setItem(ROOM_KEY,room); else localStorage.removeItem(ROOM_KEY);
+ setSyncStatus("로그인 완료 · 캐릭터 불러오는 중…");
+ // 사용자 ID가 바뀌면 시트 소유권 계산이 전부 달라지므로, 저장 후
+ // 새로고침으로 깨끗하게 다시 부팅합니다(부팅 시 방에 자동 재접속).
+ location.reload();
  return true;
 }
 async function manageTemporaryLogin(){
- if(!TEMP_LOGIN){ await startTemporaryLogin(false); return; }
- const action=await modalChoice(`현재 임시 로그인: ${TEMP_LOGIN.nickname}\n이 로그인은 이 브라우저에만 저장되며 비밀번호를 사용하지 않습니다.`,[
-  {label:"닉네임 변경",value:"rename",primary:true},
-  {label:"다른 임시 사용자",value:"switch"},
+ if(!isLoggedIn()){ await openLoginDialog(); return; }
+ const action=await modalChoice(`현재 임시 로그인: ${TEMP_LOGIN.nickname}\n${currentRoom?`접속한 방: ${currentRoom}`:"방에 접속하지 않음 (혼자 쓰기)"}`,[
+  {label:"다른 계정으로 로그인",value:"switch",primary:true},
+  {label:"방 코드 변경",value:"room"},
   {label:"로그아웃",value:"logout"}
  ]);
- if(action==="rename") await startTemporaryLogin(false);
- if(action==="switch") await startTemporaryLogin(true);
+ if(action==="switch"){ await openLoginDialog(); return; }
+ if(action==="room"){ await changeRoom(); return; }
  if(action==="logout"){
-  const ok=await modalConfirm("임시 로그아웃할까요? 캐릭터와 방 데이터는 삭제되지 않습니다.");
+  const ok=await modalConfirm("로그아웃할까요?\n캐릭터와 방 데이터는 삭제되지 않으며, 다시 같은 닉네임으로 로그인하면 그대로 불러옵니다.");
   if(!ok) return;
-  TEMP_LOGIN=null;
+  collect();
+  cacheMyRoomSheet();
   localStorage.removeItem(TEMP_LOGIN_KEY);
-  db.pcs.filter(p=>p.ownerId===PLAYER_ID).forEach(p=>{ p.ownerNickname="게스트"; });
-  persistQuiet();
-  setTemporaryLoginUI();
-  renderGM();
+  TEMP_LOGIN=null;
+  if(roomRef){ roomRef.off(); roomRef=null; }
+  location.reload();
  }
 }
 
@@ -1051,12 +1360,37 @@ function normalizeFamiliar(p){
  while(p.familiarWounds.length<3) p.familiarWounds.push(false);
  p.familiarUses=Array.isArray(p.familiarUses) ? p.familiarUses.slice(0,3).map(Boolean) : Array(3).fill(false);
  while(p.familiarUses.length<3) p.familiarUses.push(false);
+ // Firebase는 빈 값/빈 배열을 그대로 돌려주지 않을 때가 있어, 배열 칸을
+ // 항상 정해진 길이로 복구해 둡니다. (없으면 렌더링에서 오류가 납니다)
+ p.experience=Array.isArray(p.experience) ? p.experience.slice(0,10).map(t=>({name:t?.name??"",type:t?.type==="기능"?"기능":"지식",grade:[1,2,3].includes(+t?.grade)?+t.grade:1})) : [];
+ while(p.experience.length<10) p.experience.push({name:"",type:"지식",grade:1});
+ p.erosion=Array.isArray(p.erosion) ? p.erosion.slice(0,3).map(v=>v??"") : [];
+ while(p.erosion.length<3) p.erosion.push("");
+ p.inventory=Array.isArray(p.inventory) ? p.inventory.slice(0,10).map(v=>v??"") : [];
+ while(p.inventory.length<10) p.inventory.push("");
+ p.healthWounds=Array.isArray(p.healthWounds) ? p.healthWounds.slice(0,10).map(Boolean) : [];
+ while(p.healthWounds.length<10) p.healthWounds.push(false);
+ p.magicUses=Array.isArray(p.magicUses) ? p.magicUses.slice(0,3).map(Boolean) : [];
+ while(p.magicUses.length<3) p.magicUses.push(false);
  return p;
 }
 let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
 db.pcs = Array.isArray(db.pcs) ? db.pcs : [];
 // 기존 로컬 저장 데이터에는 ownerId가 없으므로 현재 브라우저의 소유권으로 이전합니다.
 db.pcs.forEach(ensurePCOwner);
+// 로그인 직전까지 게스트(또는 예전 임시 ID)로 만들어 둔 시트가 있으면
+// 새 계정 소유로 한 번만 이전합니다. 로그인해도 쓰던 캐릭터가 사라지지 않습니다.
+(()=>{
+ const legacyOwner=localStorage.getItem(LEGACY_OWNER_KEY);
+ if(!legacyOwner) return;
+ if(legacyOwner!==PLAYER_ID && !db.pcs.some(p=>p.ownerId===PLAYER_ID)){
+  db.pcs.filter(p=>p.ownerId===legacyOwner).forEach(p=>{
+   p.ownerId=PLAYER_ID;
+   p.ownerNickname=TEMP_LOGIN?.nickname||p.ownerNickname||"게스트";
+  });
+ }
+ localStorage.removeItem(LEGACY_OWNER_KEY);
+})();
 // 한 사용자에게 과거 데이터로 여러 장이 남아 있어도 현재 사용자의 시트는 정확히 1장만 유지합니다.
 const owned = db.pcs.filter(p=>p.ownerId===PLAYER_ID);
 if(owned.length>1){
@@ -1098,7 +1432,8 @@ db.pcs.forEach(p=>{
   }
 });
 let current=()=>db.pcs.find(p=>p.id===db.activeId) || db.pcs.find(p=>p.ownerId===PLAYER_ID) || db.pcs[0];
-function canEditCharacter(p){ return !!p && (p.ownerId===PLAYER_ID || gmUnlocked); }
+// 로그인하지 않은 상태에서는 화면만 보이고 어떤 시트도 편집할 수 없습니다.
+function canEditCharacter(p){ return isLoggedIn() && !!p && (p.ownerId===PLAYER_ID || gmUnlocked); }
 function canEditCurrent(){ return canEditCharacter(current()); }
 
 /* persist(): full save + full structural re-render (rebuilds the tag/erosion/
@@ -1139,6 +1474,10 @@ function populateFields(){
  document.querySelectorAll('input[name="magicForm"]').forEach(r=>{ r.checked = (r.value===(p.magicForm||"")); });
 }
 async function mode(x){
+ if(!isLoggedIn()){
+  await modalAlert("먼저 로그인해 주세요.\n오른쪽 위 '로그인' 버튼으로 임시 로그인할 수 있습니다.");
+  return;
+ }
  if(x==="gm"){
   const lock=db.gmLock||{enabled:false,pin:"",ownerId:""};
   if(lock.enabled && lock.ownerId && lock.ownerId!==PLAYER_ID){
@@ -1211,7 +1550,7 @@ function renderCharSelect(){
  if(!sel)return;
  const list = db.pcs;
  sel.innerHTML=list.map(p=>{
-   const ownerLabel=p.ownerId===PLAYER_ID?"내 캐릭터":"다른 플레이어 · 읽기 전용";
+   const ownerLabel=p.ownerId===PLAYER_ID?"내 캐릭터":`${esc(p.ownerNickname||"게스트")} · ${canClaimCharacter(p)?"가져오기 가능":"읽기 전용"}`;
    return `<option value="${p.id}" ${p.id===db.activeId?"selected":""}>${ownerLabel} — ${esc(p.name||"이름 없음")}</option>`;
  }).join("");
 }
@@ -1282,7 +1621,7 @@ function renderPlayer(){
  applySheetAccess(canEditCharacter(p));
  renderSpecialFeature(p);
  const label=document.querySelector('#playerView .toolbar .charbar label');
- if(label) label.textContent = p.ownerId===PLAYER_ID ? '내 캐릭터' : (gmUnlocked ? '마스터 편집 중' : '다른 플레이어 · 읽기 전용');
+ if(label) label.textContent = p.ownerId===PLAYER_ID ? '내 캐릭터' : (gmUnlocked ? '마스터 편집 중' : (canClaimCharacter(p) ? '가져올 수 있는 캐릭터' : '다른 플레이어 · 읽기 전용'));
 }
 function applySheetAccess(canEdit){
  const root=document.getElementById("playerView");
@@ -1295,8 +1634,17 @@ function applySheetAccess(canEdit){
  });
  root.querySelectorAll('button').forEach(btn=>{
    if(btn.closest('.exportbar')) return;
+   if(btn.id==="claimBtn") return;
    btn.disabled=!canEdit;
  });
+ const claim=document.getElementById("claimBtn");
+ if(claim){
+   const p=current();
+   const claimable=canClaimCharacter(p);
+   claim.style.display=claimable?"":"none";
+   claim.disabled=false;
+   claim.title=claimable?"이 캐릭터를 지금 로그인한 계정의 캐릭터로 연결합니다.":"";
+ }
  const add=document.querySelector('button[onclick="addMyCharacter()"]');
  const reset=document.querySelector('button[onclick="resetCharacter()"]');
  const del=document.querySelector('button[onclick="deleteCharacter()"]');
@@ -1587,16 +1935,26 @@ function renderAll(){renderPlayer();renderGM();renderSharedLog()}
 renderAll();
 
 async function bootApp(){
- setTemporaryLoginUI();
- if(!TEMP_LOGIN) await startTemporaryLogin(false);
+ const roomBtn=document.getElementById("roomCodeBtn");
+ if(roomBtn) roomBtn.textContent = currentRoom || "-";
+ applyLoginGate();
+ if(!isLoggedIn()){
+  // 로그인 전에는 아무것도 묻지 않습니다. 시트를 로컬 미리보기로만
+  // 보여 주고, 오른쪽 위 로그인 버튼(또는 가운데 안내창)을 기다립니다.
+  setSyncStatus("로그인 필요");
+  return;
+ }
  watchFirebaseConnection();
- // 방 코드가 저장돼 있으면 자동으로 재접속, 없으면 새로 물어봄
+ // 방 코드가 저장돼 있으면 자동으로 재접속해서 내 캐릭터와 방 캐릭터를 불러옵니다.
  if(currentRoom){
-  document.getElementById("roomCodeBtn").textContent = currentRoom;
   joinRoom(currentRoom);
  }else{
-  changeRoom();
+  // 혼자 쓰기 모드에서도 로그인 전에 만들어 둔 시트를 계정에 연결합니다.
+  if(autoClaimMySheets()){ localStorage.setItem(KEY,JSON.stringify(db)); }
+  renderAll();
+  setSyncStatus("혼자 쓰기 (방 미접속)");
  }
+ setTemporaryLoginUI();
 }
 bootApp();
 </script>
