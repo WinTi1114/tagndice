@@ -440,6 +440,10 @@ table.stuff-table input{width:100%}
   <button class="tbtn" id="roomCodeBtn" onclick="changeRoom()">-</button>
   <span id="syncStatus" class="muted" style="min-width:70px;display:inline-block"></span>
  </div>
+ <div class="charbar">
+  <label>임시 로그인</label>
+  <button class="tbtn" id="tempLoginBtn" onclick="manageTemporaryLogin()">로그인</button>
+ </div>
 </div></header>
 
 <main class="wrap">
@@ -716,11 +720,20 @@ try{
  console.error("Firebase 초기화 실패:", e);
 }
 const ROOM_KEY = "tagdice_room";
+const ROOM_SHEET_CACHE_PREFIX = "tagdice_room_sheet_v1";
 // 브라우저 탭마다 새 ID를 만드는 기존 방식은 같은 방의 모든 데이터를
 // 하나의 db 객체로 덮어쓰게 만들었습니다. 이제 사용자(브라우저)별로
 // 영속적인 PLAYER_ID를 발급하고 Firebase에서 각 사용자의 시트를 분리합니다.
 const PLAYER_ID_KEY = "tagdice_player_id";
-const PLAYER_ID = localStorage.getItem(PLAYER_ID_KEY) || (()=>{
+const TEMP_LOGIN_KEY = "tagdice_temp_login";
+function loadTemporaryLogin(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(TEMP_LOGIN_KEY)||"null");
+  return saved && typeof saved.id==="string" && typeof saved.nickname==="string" ? saved : null;
+ }catch(e){ return null; }
+}
+let TEMP_LOGIN=loadTemporaryLogin();
+const PLAYER_ID = TEMP_LOGIN?.id || localStorage.getItem(PLAYER_ID_KEY) || (()=>{
  const id = crypto.randomUUID();
  localStorage.setItem(PLAYER_ID_KEY, id);
  return id;
@@ -730,14 +743,29 @@ let currentRoom = localStorage.getItem(ROOM_KEY) || "";
 let roomRef = null;
 let applyingRemote = false;
 let currentView = "player";
+let firebaseConnectionRef = null;
 
 function setSyncStatus(text){
  const el=document.getElementById("syncStatus");
  if(el) el.textContent=text;
 }
+function watchFirebaseConnection(){
+ if(!firebaseReady || firebaseConnectionRef) return;
+ firebaseConnectionRef=fbdb.ref(".info/connected");
+ firebaseConnectionRef.on("value",snap=>{
+  if(!currentRoom) return;
+  if(snap.val()===true){
+   setSyncStatus("연결됨 · 동기화 중");
+   pushToRoom();
+  }else{
+   setSyncStatus("연결 끊김 · 방별 로컬 백업 사용");
+  }
+ });
+}
 
 function ensurePCOwner(p){
  if(p && !p.ownerId) p.ownerId = PLAYER_ID;
+ if(p && !p.ownerNickname) p.ownerNickname = (p.ownerId===PLAYER_ID ? TEMP_LOGIN?.nickname : "") || "게스트";
  return p;
 }
 function myPCs(){ return (db.pcs||[]).filter(p=>p.ownerId===PLAYER_ID); }
@@ -753,6 +781,45 @@ function ensureMyCharacter(){
  return p;
 }
 
+function roomSheetCacheKey(room){ return `${ROOM_SHEET_CACHE_PREFIX}:${PLAYER_ID}:${encodeURIComponent(room||"")}`; }
+function readRoomSheetCache(room){
+ if(!room) return null;
+ try{
+  const saved=JSON.parse(localStorage.getItem(roomSheetCacheKey(room))||"null");
+  const pc=saved?.pc;
+  return pc && pc.ownerId===PLAYER_ID ? pc : null;
+ }catch(e){ return null; }
+}
+function cacheMyRoomSheet(){
+ if(!currentRoom || !db?.pcs) return;
+ const mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
+ if(!mine) return;
+ try{ localStorage.setItem(roomSheetCacheKey(currentRoom),JSON.stringify({pc:mine,savedAt:Date.now()})); }
+ catch(e){ console.warn("방별 로컬 백업에 실패했습니다.",e); }
+}
+function loadRoomSheet(room){
+ const cached=readRoomSheetCache(room);
+ db={activeId:null,pcs:cached?[cached]:[],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
+ db.pcs.forEach(p=>{ ensurePCOwner(p); normalizeFamiliar(p); });
+ ensureMyCharacter();
+ db.activeId=db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;
+ renderedPlayerId=null;
+}
+function ensureRoomCharacter(room){
+ const mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
+ if(mine) return false;
+ const cached=readRoomSheetCache(room);
+ if(cached){
+  ensurePCOwner(cached); normalizeFamiliar(cached);
+  db.pcs.push(cached);
+ }else{
+  ensureMyCharacter();
+ }
+ db.activeId=db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;
+ renderedPlayerId=null;
+ return true;
+}
+
 function mergeRoomSnapshot(payload){
  if(!payload) return false;
  const players = payload.players || {};
@@ -762,7 +829,7 @@ function mergeRoomSnapshot(payload){
    const player = players[ownerId] || {};
    // 새 구조에서도 사용자당 첫 번째 시트만 유지합니다.
    const raw = Array.isArray(player.pcs) ? player.pcs[0] : null;
-   if(raw) allPCs.push({...raw, ownerId:raw.ownerId||ownerId});
+   if(raw) allPCs.push({...raw, ownerId:raw.ownerId||ownerId, ownerNickname:raw.ownerNickname||player.profile?.nickname||"게스트"});
   });
  }else if(payload.data && Array.isArray(payload.data.pcs)){
   // v5 이전의 room 데이터 호환: 기존 공유 시트는 최초 접속한 사용자의
@@ -771,7 +838,7 @@ function mergeRoomSnapshot(payload){
   if(legacy) allPCs.push({...legacy, ownerId:PLAYER_ID});
  }
  db.pcs = allPCs;
- db.pcs.forEach(normalizeFamiliar);
+ db.pcs.forEach(p=>{ normalizeFamiliar(p); p.ownerNickname=p.ownerNickname||"게스트"; });
  db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:"",ownerId:""};
  db.logs = Array.isArray(payload.meta?.logs) ? payload.meta.logs : (Array.isArray(payload.data?.logs) ? payload.data.logs : []);
  // 중요: Firebase에서 다른 사용자의 시트가 변경되어도 현재 브라우저의
@@ -791,33 +858,47 @@ function mergeRoomSnapshot(payload){
 }
 
 function joinRoom(room){
+ collect();
+ cacheMyRoomSheet();
  currentRoom = room;
  localStorage.setItem(ROOM_KEY, room);
  const btn=document.getElementById("roomCodeBtn");
  if(btn) btn.textContent = room;
- if(!firebaseReady){ setSyncStatus("동기화 불가 (로컬 전용)"); return; }
+ if(!firebaseReady){
+  loadRoomSheet(room);
+  renderAll();
+  setSyncStatus("동기화 불가 (방별 로컬 시트)");
+  return;
+ }
  if(roomRef) roomRef.off();
  if(!room){ setSyncStatus(""); roomRef=null; return; }
  setSyncStatus("연결 중…");
- roomRef = fbdb.ref("sessions/" + room);
- roomRef.on("value", snap => {
+ const requestedRef=fbdb.ref("sessions/" + room);
+ roomRef = requestedRef;
+ requestedRef.on("value", snap => {
+  // 방을 빠르게 바꿨을 때 이전 방에서 늦게 도착한 응답은 무시합니다.
+  if(currentRoom!==room || roomRef!==requestedRef) return;
   const payload = snap.val();
   if(!payload){
-   ensureMyCharacter();
+   loadRoomSheet(room);
+   renderAll();
+   cacheMyRoomSheet();
    pushToRoom();
-   setSyncStatus("연결됨 (내 시트 생성)");
+   setSyncStatus("연결됨 (이 방의 내 시트 준비)");
    return;
   }
- applyingRemote = true;
- const hadMyCharacter = db.pcs.some(p=>p.ownerId===PLAYER_ID);
- mergeRoomSnapshot(payload);
+  applyingRemote = true;
+  mergeRoomSnapshot(payload);
+  const createdOrRestored=ensureRoomCharacter(room);
   db.gmLock = db.gmLock || {enabled:false,pin:"",ownerId:""};
   gmUnlocked = !!(db.gmLock.enabled && db.gmLock.ownerId===PLAYER_ID);
   renderAll();
   applyingRemote = false;
-  if(!hadMyCharacter) pushToRoom();
-  setSyncStatus("연결됨 · 내 시트 분리됨");
+  cacheMyRoomSheet();
+  if(createdOrRestored) pushToRoom();
+  setSyncStatus(createdOrRestored ? "연결됨 · 이 방의 내 시트 준비" : "연결됨 · 이 방의 내 시트 불러옴");
  }, err => {
+  if(currentRoom!==room || roomRef!==requestedRef) return;
   setSyncStatus("연결 실패");
   console.error(err);
  });
@@ -828,7 +909,7 @@ function syncPlayerNode(ownerId){
  const target=db.pcs.find(p=>p.ownerId===ownerId);
  const updates={};
  if(target){
-  updates[`players/${ownerId}`]={pcs:[{...target,ownerId}],activeId:target.id,updatedAt:Date.now()};
+  updates[`players/${ownerId}`]={profile:{id:ownerId,nickname:target.ownerNickname||"게스트"},pcs:[{...target,ownerId}],activeId:target.id,updatedAt:Date.now()};
  }else{
   updates[`players/${ownerId}`]=null;
  }
@@ -917,8 +998,51 @@ function modalConfirm(msg){ return showModal({message:msg,type:"confirm"}); }
 function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defaultValue:def||""}); }
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
 
+function setTemporaryLoginUI(){
+ const btn=document.getElementById("tempLoginBtn");
+ if(!btn) return;
+ btn.textContent=TEMP_LOGIN ? `${TEMP_LOGIN.nickname} ▾` : "로그인";
+ btn.title=TEMP_LOGIN ? "임시 로그인 관리" : "임시 로그인";
+}
+async function startTemporaryLogin(makeNewIdentity=false){
+ const value=await modalPrompt("임시 로그인\n닉네임만 사용하며 비밀번호나 실제 계정은 만들지 않습니다.", TEMP_LOGIN?.nickname||"");
+ if(value===null) return false;
+ const nickname=value.trim().replace(/\s+/g," ").slice(0,16);
+ if(!nickname){ await modalAlert("닉네임을 입력해 주세요."); return false; }
+ const id=makeNewIdentity ? crypto.randomUUID() : (TEMP_LOGIN?.id || PLAYER_ID);
+ TEMP_LOGIN={id,nickname};
+ localStorage.setItem(TEMP_LOGIN_KEY,JSON.stringify(TEMP_LOGIN));
+ localStorage.setItem(PLAYER_ID_KEY,id);
+ if(id!==PLAYER_ID){ location.reload(); return true; }
+ db.pcs.filter(p=>p.ownerId===PLAYER_ID).forEach(p=>{ p.ownerNickname=nickname; });
+ persistQuiet();
+ setTemporaryLoginUI();
+ renderGM();
+ return true;
+}
+async function manageTemporaryLogin(){
+ if(!TEMP_LOGIN){ await startTemporaryLogin(false); return; }
+ const action=await modalChoice(`현재 임시 로그인: ${TEMP_LOGIN.nickname}\n이 로그인은 이 브라우저에만 저장되며 비밀번호를 사용하지 않습니다.`,[
+  {label:"닉네임 변경",value:"rename",primary:true},
+  {label:"다른 임시 사용자",value:"switch"},
+  {label:"로그아웃",value:"logout"}
+ ]);
+ if(action==="rename") await startTemporaryLogin(false);
+ if(action==="switch") await startTemporaryLogin(true);
+ if(action==="logout"){
+  const ok=await modalConfirm("임시 로그아웃할까요? 캐릭터와 방 데이터는 삭제되지 않습니다.");
+  if(!ok) return;
+  TEMP_LOGIN=null;
+  localStorage.removeItem(TEMP_LOGIN_KEY);
+  db.pcs.filter(p=>p.ownerId===PLAYER_ID).forEach(p=>{ p.ownerNickname="게스트"; });
+  persistQuiet();
+  setTemporaryLoginUI();
+  renderGM();
+ }
+}
+
 const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","familiarName","familiarForm","familiarOrigin","familiarTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
-const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],specialFeature:"magic",magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],familiarName:"",familiarForm:"",familiarOrigin:"",familiarTag:"",familiarWounds:Array(3).fill(false),familiarUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
+const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,ownerNickname:TEMP_LOGIN?.nickname||"게스트",name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],specialFeature:"magic",magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],familiarName:"",familiarForm:"",familiarOrigin:"",familiarTag:"",familiarWounds:Array(3).fill(false),familiarUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
 function normalizeFamiliar(p){
  if(!p) return p;
  p.specialFeature=["magic","familiar"].includes(p.specialFeature) ? p.specialFeature : "magic";
@@ -986,9 +1110,9 @@ function canEditCurrent(){ return canEditCharacter(current()); }
    persistQuiet(): just writes localStorage. Pair it with a small, targeted
    DOM update (or none) for anything typed into a field that already shows
    what was typed on its own. */
-function persist(){localStorage.setItem(KEY,JSON.stringify(db));renderAll();pushToRoom()}
+function persist(){localStorage.setItem(KEY,JSON.stringify(db));cacheMyRoomSheet();renderAll();pushToRoom()}
 function persistQuiet(){
- try{ localStorage.setItem(KEY,JSON.stringify(db)); }
+ try{ localStorage.setItem(KEY,JSON.stringify(db)); cacheMyRoomSheet(); }
  catch(e){ modalAlert("저장 공간이 부족합니다. 초상화 이미지가 너무 많거나 커서 브라우저 저장 한도를 넘었을 수 있어요."); }
  pushToRoom();
 }
@@ -1126,7 +1250,9 @@ async function resetCharacter(){
  db.pcs[idx]=fresh; db.activeId=fresh.id; renderedPlayerId=null;
  persist();
 }
-let renderedPlayerId = null;
+// 초기 부팅 중 새 임시 사용자의 시트를 만들 때도 안전하게 초기화되도록
+// var를 사용합니다. ensureMyCharacter()는 이 선언보다 먼저 실행될 수 있습니다.
+var renderedPlayerId = null;
 function playerHasFocusedEditable(){
  const root=document.getElementById("playerView");
  const a=document.activeElement;
@@ -1412,8 +1538,8 @@ function renderGM(){
  // view is actually active; otherwise equipment/name inputs get overwritten.
  if(currentView==="gm") populateFields();
  document.getElementById("gmSecretFor").textContent=esc(current().name||"이름 없음");
- document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${healthCurrent(p)}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
- document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${healthCurrent(p)}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
+ document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${esc(p.ownerNickname||"게스트")} · ${healthCurrent(p)}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
+ document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">플레이어: ${esc(p.ownerNickname||"게스트")} · ${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${healthCurrent(p)}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
  document.getElementById("log").innerHTML=db.logs.slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
 function addPC(){
@@ -1460,13 +1586,19 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 function renderAll(){renderPlayer();renderGM();renderSharedLog()}
 renderAll();
 
-// 방 코드가 저장돼 있으면 자동으로 재접속, 없으면 새로 물어봄
-if(currentRoom){
- document.getElementById("roomCodeBtn").textContent = currentRoom;
- joinRoom(currentRoom);
-}else{
- setTimeout(()=>{ changeRoom(); }, 300);
+async function bootApp(){
+ setTemporaryLoginUI();
+ if(!TEMP_LOGIN) await startTemporaryLogin(false);
+ watchFirebaseConnection();
+ // 방 코드가 저장돼 있으면 자동으로 재접속, 없으면 새로 물어봄
+ if(currentRoom){
+  document.getElementById("roomCodeBtn").textContent = currentRoom;
+  joinRoom(currentRoom);
+ }else{
+  changeRoom();
+ }
 }
+bootApp();
 </script>
 </body>
 </html>
