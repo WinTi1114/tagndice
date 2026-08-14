@@ -851,11 +851,11 @@ function readRoomSheetCache(room){
  };
  const own=tryKey(PLAYER_ID);
  if(own && own.ownerId===PLAYER_ID) return own;
- // 로그인 전(게스트)이나 예전 ID로 저장해 둔 이 방의 시트가 있으면
- // 지금 계정의 시트로 이어받습니다.
- for(const oldId of readKnownOwnerIds()){
-  if(oldId===PLAYER_ID) continue;
-  const pc=tryKey(oldId);
+ // 계정 전환 시 다른 실제 계정의 캐릭터를 자동으로 가져오지 않습니다.
+ // 자동 이어받기는 로그인 전 게스트/레거시 ID에 대해서만 허용합니다.
+ const legacyOwner=localStorage.getItem(LEGACY_OWNER_KEY);
+ if(legacyOwner && legacyOwner!==PLAYER_ID && !isAccountId(legacyOwner)){
+  const pc=tryKey(legacyOwner);
   if(pc){
    pc.ownerId=PLAYER_ID;
    pc.ownerNickname=TEMP_LOGIN?.nickname||pc.ownerNickname||"게스트";
@@ -896,10 +896,13 @@ function sheetIsBlank(p){
    다른 사람이 로그인한 계정의 시트는 가져올 수 없습니다. */
 function canClaimCharacter(p){
  if(!isLoggedIn() || !p || p.ownerId===PLAYER_ID) return false;
- if(readKnownOwnerIds().includes(p.ownerId)) return true;
- if(!isAccountId(p.ownerId)) return true;
- if(p.ownerNickname && p.ownerNickname===TEMP_LOGIN.nickname) return true;
- return false;
+ // user_ 로 시작하는 소유자는 실제 로그인 계정입니다. 다른 계정의 캐릭터는
+ // 자동/수동 가져오기 모두 허용하지 않습니다.
+ if(isAccountId(p.ownerId)) return false;
+ const legacyOwner=localStorage.getItem(LEGACY_OWNER_KEY);
+ if(legacyOwner && legacyOwner===p.ownerId) return true;
+ if(!legacyOwner && p.ownerNickname && p.ownerNickname===TEMP_LOGIN.nickname) return true;
+ return true;
 }
 function takeOverSheet(p){
  const previousOwner=p.ownerId;
@@ -915,8 +918,11 @@ function takeOverSheet(p){
    같은 방에 있는 다른 사람의 게스트 시트를 실수로 가져가지 않도록 하기 위함입니다. */
 function canAutoClaim(p){
  if(!isLoggedIn() || !p || p.ownerId===PLAYER_ID) return false;
- if(readKnownOwnerIds().includes(p.ownerId)) return true;
- if(!isAccountId(p.ownerId) && p.ownerNickname && p.ownerNickname===TEMP_LOGIN.nickname) return true;
+ // 실제 계정의 캐릭터는 절대로 다른 계정으로 자동 이전하지 않습니다.
+ if(isAccountId(p.ownerId)) return false;
+ const legacyOwner=localStorage.getItem(LEGACY_OWNER_KEY);
+ if(legacyOwner && legacyOwner===p.ownerId) return true;
+ if(!legacyOwner && p.ownerNickname && p.ownerNickname===TEMP_LOGIN.nickname) return true;
  return false;
 }
 /* 접속/로그인 직후, 내 것으로 볼 수 있는 시트를 자동으로 이어받습니다. */
@@ -1398,7 +1404,10 @@ if(owned.length>1){
  db.pcs = db.pcs.filter(p=>p.ownerId!==PLAYER_ID || p.id===keepId);
 }
 if(!db.pcs.some(p=>p.ownerId===PLAYER_ID)) ensureMyCharacter();
-db.activeId = db.activeId && db.pcs.some(p=>p.id===db.activeId) ? db.activeId : db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id || db.pcs[0].id;
+// 계정 전환/재로그인 직후에는 이전 계정의 activeId를 유지하지 않고,
+// 현재 로그인 계정의 캐릭터를 항상 우선 선택합니다.
+const myInitialPC = db.pcs.find(p=>p.ownerId===PLAYER_ID);
+db.activeId = myInitialPC?.id || (db.activeId && db.pcs.some(p=>p.id===db.activeId) ? db.activeId : db.pcs[0]?.id || null);
 db.gmLock = db.gmLock || {enabled:false,pin:""};
 let gmUnlocked = false;
 db.pcs.forEach(p=>{
