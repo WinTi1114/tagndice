@@ -68,7 +68,7 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .log div{height:24px;box-sizing:border-box;padding:4px 0;border-bottom:1px solid #c6b58e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shared-log-wrap{background:var(--paper2);border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:14px}
 .shared-log-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800;color:var(--red);font-size:14px;margin-bottom:2px}
-.shared-log-wrap .log{max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden}
+.shared-log-wrap .log{height:120px;max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 .modal-overlay{position:fixed;inset:0;background:rgba(30,20,10,.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
 .modal-box{background:var(--paper);border:2px solid #46351f;box-shadow:0 10px 40px rgba(0,0,0,.4);padding:20px;max-width:380px;width:100%}
 .modal-message{white-space:pre-line;margin-bottom:14px;line-height:1.6;font-size:14px}
@@ -181,6 +181,16 @@ table.grid th{background:var(--p-bg3);color:var(--p-ink2);font-weight:700;font-s
 .radio-inline{display:inline-flex;align-items:center;gap:.8mm;margin-right:3mm;font-size:8pt;white-space:nowrap}
 .radio-inline input{width:auto}
 .mi-tag{margin-top:1.5mm}
+.special-feature-choice{display:flex;align-items:center;gap:1.4mm;flex-wrap:wrap;margin:1.4mm 0}
+.special-feature-choice .choice-label{font-size:6.6pt;color:var(--p-gold);font-weight:700;white-space:nowrap}
+.feature-choice{border:.7pt solid var(--p-line);border-radius:1mm;background:var(--p-bg);padding:.7mm 1.8mm;font:700 7.4pt inherit;color:var(--p-ink2)}
+.feature-choice.active{background:var(--p-accent);border-color:var(--p-accent);color:var(--p-bg)}
+.feature-choice:disabled{cursor:not-allowed}
+.familiar{border:.8pt solid var(--p-accent2);border-radius:1mm;padding:1mm 2.4mm;background:var(--p-bg2);margin-bottom:1.4mm}
+.familiar.feature-inactive,.magicitem.feature-inactive{opacity:.5}
+.familiar.feature-inactive input,.magicitem.feature-inactive input,.familiar.feature-inactive button,.magicitem.feature-inactive button{cursor:not-allowed}
+.familiar-origin{margin-top:1.5mm}
+.familiar-heart{min-width:9mm}
 
 .gear{margin-top:1mm}
 .stuff-head{font-size:6.5pt;line-height:1.4;color:var(--p-ink2);margin-bottom:.8mm}
@@ -330,13 +340,18 @@ table.stuff-table input{width:100%}
  .ruleref{border-width:1px;border-radius:4px;padding:9px 12px;font-size:12.5px;margin-top:9px}
 
  /* ---- front: magic item + gear ---- */
- .magicitem{border-width:1px;border-radius:4px;padding:14px 16px;margin-bottom:16px}
+ .magicitem,.familiar{border-width:1px;border-radius:4px;padding:14px 16px;margin-bottom:16px}
  .mi-row{gap:18px}
  .mi-name{min-width:200px}
  .mi-form,.mi-uses{font-size:14px}
  .mi-form label,.mi-uses label,.mi-tag label{font-size:12px;margin-bottom:6px}
  .radio-inline{gap:5px;margin-right:14px;font-size:14px}
  .mi-tag{margin-top:12px}
+ .special-feature-choice{gap:8px;margin:12px 0}
+ .special-feature-choice .choice-label{font-size:12px}
+ .feature-choice{border-width:1px;border-radius:4px;padding:6px 11px;font-size:13px}
+ .familiar-origin{margin-top:12px}
+ .familiar-heart{min-width:46px}
 
  .gear{margin-top:14px}
  .stuff-head{font-size:12px;line-height:1.6;margin-bottom:8px}
@@ -391,7 +406,8 @@ table.stuff-table input{width:100%}
 }
 @media print{
  @page{size:A4;margin:0}
- .topbar,.toolbar,.paper-label,.rollcard,.resource-actions,.mini,.portrait-remove,.portrait .cap,.shared-log-wrap,#gmView,#modalOverlay{display:none!important}
+ .topbar,.toolbar,.paper-label,.rollcard,.resource-actions,.mini,.portrait-remove,.portrait .cap,.shared-log-wrap,.special-feature-choice,#gmView,#modalOverlay{display:none!important}
+ .familiar.feature-inactive,.magicitem.feature-inactive{opacity:1}
  body{background:#fff}
  .wrap{padding:0;max-width:none}
  .papers-viewport{height:auto!important;overflow:visible!important}
@@ -526,7 +542,13 @@ table.stuff-table input{width:100%}
    </div>
   </div>
 
-  <div class="magicitem">
+  <div class="special-feature-choice" role="group" aria-label="특별 기능 선택">
+   <span class="choice-label">특별 기능 (양자택일)</span>
+   <button type="button" class="feature-choice" data-special-choice="magic" onclick="selectSpecialFeature('magic')">마법 물품</button>
+   <button type="button" class="feature-choice" data-special-choice="familiar" onclick="selectSpecialFeature('familiar')">패밀리어</button>
+  </div>
+
+  <div id="magicFeature" class="magicitem">
    <h2 class="sec sec-flush">마법 물품 <span class="cap">— 나의 정체성을 상징하는 특별한 물품. 세션당 3회, 내 차례에 1회만 발동</span></h2>
    <div class="mi-row">
     <div class="field mi-name"><label>물품 이름</label><input id="magicItem" class="uline" oninput="saveField()"></div>
@@ -539,6 +561,18 @@ table.stuff-table input{width:100%}
     <div class="mi-uses"><label>사용(세션당)</label><div id="magicUses" class="actions"></div></div>
    </div>
    <div class="field mi-tag"><label>전용 태그 — 경험 태그와 유일하게 중첩 가능 (판정/선언 시 함께 걸어 두 효과를 하나의 묘사로 엮음)</label><input id="dedicatedTag" class="uline" oninput="saveField()"></div>
+  </div>
+
+  <div id="familiarFeature" class="familiar">
+   <h2 class="sec sec-flush">패밀리어 <span class="cap">— 마법 물품과 양자택일. 체력 3칸·정신력/피로도 없음. 세션당 3회, 내 차례에 1회만 발동</span></h2>
+   <div class="mi-row">
+    <div class="field mi-name"><label>이름</label><input id="familiarName" class="uline" oninput="saveField()"></div>
+    <div class="field mi-name"><label>형태</label><input id="familiarForm" class="uline" placeholder="동물·정령·괴물·인형·그림자 등" oninput="saveField()"></div>
+    <div class="mi-uses"><label>체력 (3칸)</label><div id="familiarHealth" class="actions"></div></div>
+    <div class="mi-uses"><label>사용(세션당)</label><div id="familiarUses" class="actions"></div></div>
+   </div>
+   <div class="field familiar-origin"><label>출처와 의미(백스토리) — 어디서 왔고, 당신과 어떻게 함께하게 되었나요?</label><input id="familiarOrigin" class="uline" oninput="saveField()"></div>
+   <div class="field mi-tag"><label>고유 태그 — 핵심 특수 능력 하나 · 1등급 고정 · 경험 태그와 유일하게 중첩 가능</label><input id="familiarTag" class="uline" oninput="saveField()"></div>
   </div>
 
   <div class="gear">
@@ -715,6 +749,7 @@ function ensureMyCharacter(){
  p.name="새 캐릭터";
  db.pcs.push(p);
  db.activeId=p.id;
+ renderedPlayerId=null;
  return p;
 }
 
@@ -736,6 +771,7 @@ function mergeRoomSnapshot(payload){
   if(legacy) allPCs.push({...legacy, ownerId:PLAYER_ID});
  }
  db.pcs = allPCs;
+ db.pcs.forEach(normalizeFamiliar);
  db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:"",ownerId:""};
  db.logs = Array.isArray(payload.meta?.logs) ? payload.meta.logs : (Array.isArray(payload.data?.logs) ? payload.data.logs : []);
  // 중요: Firebase에서 다른 사용자의 시트가 변경되어도 현재 브라우저의
@@ -772,8 +808,9 @@ function joinRoom(room){
    setSyncStatus("연결됨 (내 시트 생성)");
    return;
   }
-  applyingRemote = true;
-  mergeRoomSnapshot(payload);
+ applyingRemote = true;
+ const hadMyCharacter = db.pcs.some(p=>p.ownerId===PLAYER_ID);
+ mergeRoomSnapshot(payload);
   db.gmLock = db.gmLock || {enabled:false,pin:"",ownerId:""};
   gmUnlocked = !!(db.gmLock.enabled && db.gmLock.ownerId===PLAYER_ID);
   renderAll();
@@ -880,8 +917,18 @@ function modalConfirm(msg){ return showModal({message:msg,type:"confirm"}); }
 function modalPrompt(msg,def){ return showModal({message:msg,type:"prompt",defaultValue:def||""}); }
 function modalChoice(msg,options){ return showModal({message:msg,type:"choice",options}); }
 
-const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
-const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
+const FIELD_KEYS=["name","intro","race","background","instinct","magicItem","dedicatedTag","familiarName","familiarForm","familiarOrigin","familiarTag","weapon","armor","gold","silver","copper","shard","secret","value","age","body","look1","backstory"];
+const blankPC=()=>({id:crypto.randomUUID(),ownerId:PLAYER_ID,name:"새 캐릭터",intro:"",race:"",background:"",instinct:"",maxHealth:5,healthWounds:Array(10).fill(false),maxMind:3,mind:3,maxFatigue:3,fatigue:3,maxDmgBonus:3,dmgBonus:0,maxDefBonus:3,defBonus:0,levelUpsUsed:0,experience:Array.from({length:10},()=>({name:"",type:"지식",grade:1})),erosion:["","",""],specialFeature:"magic",magicItem:"",dedicatedTag:"",magicForm:"",magicUses:[false,false,false],familiarName:"",familiarForm:"",familiarOrigin:"",familiarTag:"",familiarWounds:Array(3).fill(false),familiarUses:[false,false,false],weapon:"",armor:"",inventory:Array(10).fill(""),gold:"",silver:"",copper:"",shard:"",secret:"",value:"",age:"",body:"",look1:"",backstory:"",portrait:""});
+function normalizeFamiliar(p){
+ if(!p) return p;
+ p.specialFeature=["magic","familiar"].includes(p.specialFeature) ? p.specialFeature : "magic";
+ p.familiarName=p.familiarName??""; p.familiarForm=p.familiarForm??""; p.familiarOrigin=p.familiarOrigin??""; p.familiarTag=p.familiarTag??"";
+ p.familiarWounds=Array.isArray(p.familiarWounds) ? p.familiarWounds.slice(0,3).map(Boolean) : Array(3).fill(false);
+ while(p.familiarWounds.length<3) p.familiarWounds.push(false);
+ p.familiarUses=Array.isArray(p.familiarUses) ? p.familiarUses.slice(0,3).map(Boolean) : Array(3).fill(false);
+ while(p.familiarUses.length<3) p.familiarUses.push(false);
+ return p;
+}
 let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
 db.pcs = Array.isArray(db.pcs) ? db.pcs : [];
 // 기존 로컬 저장 데이터에는 ownerId가 없으므로 현재 브라우저의 소유권으로 이전합니다.
@@ -912,6 +959,7 @@ db.pcs.forEach(p=>{
   p.dmgBonus=Math.min(p.maxDmgBonus,p.dmgBonus??0); p.defBonus=Math.min(p.maxDefBonus,p.defBonus??0);
   p.magicUses=p.magicUses||[false,false,false];
   p.magicForm=p.magicForm||"";
+  normalizeFamiliar(p);
   p.erosion=p.erosion||["","",""];
   p.inventory=p.inventory||Array(10).fill("");
   p.gold=p.gold??""; p.silver=p.silver??""; p.copper=p.copper??""; p.shard=p.shard??"";
@@ -952,7 +1000,13 @@ function collect(){
    if(e) p[k]=e.value;
  });
 }
-function saveField(){ if(!canEditCurrent()) return; collect(); persistQuiet(); }
+function saveField(){
+ if(!canEditCurrent()) return;
+ // Save the model/Firebase only. Do NOT call renderAll() here: replacing an
+ // input on every keystroke breaks caret position and Korean IME composition.
+ collect();
+ persistQuiet();
+}
 function populateFields(){
  let p=current(); if(!p)return;
  FIELD_KEYS.forEach(k=>{let e=document.getElementById(k);if(e)e.value=p[k]||""});
@@ -1023,6 +1077,7 @@ function setActive(id){
  if(!p) return;
  collect();
  db.activeId=id;
+ renderedPlayerId=null;
  localStorage.setItem(KEY,JSON.stringify(db));
  renderAll();
  if(currentView!=="gm") mode("player");
@@ -1047,6 +1102,7 @@ async function deleteCharacterById(id){
  collect();
  const ownerId=p.ownerId;
  db.pcs=db.pcs.filter(x=>x.id!==id);
+ renderedPlayerId=null;
  db.activeId=(isMine ? (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null) : (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null));
  localStorage.setItem(KEY,JSON.stringify(db));
  renderAll();
@@ -1067,24 +1123,38 @@ async function resetCharacter(){
  if(idx<0)return;
  const fresh=blankPC();
  fresh.id=p.id; fresh.ownerId=p.ownerId;
- db.pcs[idx]=fresh; db.activeId=fresh.id;
+ db.pcs[idx]=fresh; db.activeId=fresh.id; renderedPlayerId=null;
  persist();
 }
+let renderedPlayerId = null;
+function playerHasFocusedEditable(){
+ const root=document.getElementById("playerView");
+ const a=document.activeElement;
+ return !!(root && a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
 function renderPlayer(){
- // FULL/structural render -- rebuilds the row lists, so only call this from
- // persist() (character switch / add / delete / import / initial load).
+ // IMPORTANT: Firebase value events can arrive while the user is typing.
+ // Never rebuild/populate the focused input in that situation; doing so
+ // replaces the DOM node, moves the caret and breaks Korean IME composition.
  const p=current(); if(!p)return;
- populateFields();
+ const activeIdChanged = renderedPlayerId!==p.id;
+ const typing = playerHasFocusedEditable() && !activeIdChanged;
+ if(!typing){
+   populateFields();
+   renderExperienceRows(p);
+   renderErosionRows(p);
+   renderInventoryRows(p);
+   renderedPlayerId=p.id;
+ }
  renderCharSelect();
- renderExperienceRows(p);
- renderErosionRows(p);
- renderInventoryRows(p);
  updateLevelDisplay(p);
  renderResources();
  renderMagic();
+ renderFamiliar();
  renderPortrait(p);
  renderSharedLog();
  applySheetAccess(canEditCharacter(p));
+ renderSpecialFeature(p);
  const label=document.querySelector('#playerView .toolbar .charbar label');
  if(label) label.textContent = p.ownerId===PLAYER_ID ? '내 캐릭터' : (gmUnlocked ? '마스터 편집 중' : '다른 플레이어 · 읽기 전용');
 }
@@ -1107,6 +1177,31 @@ function applySheetAccess(canEdit){
  if(add) add.disabled = myPCs().length>=1;
  if(reset) reset.disabled=!canEdit;
  if(del) del.disabled=!canEdit;
+}
+function renderSpecialFeature(p){
+ const feature=p.specialFeature==="familiar" ? "familiar" : "magic";
+ const magic=document.getElementById("magicFeature");
+ const familiar=document.getElementById("familiarFeature");
+ if(magic) magic.classList.toggle("feature-inactive",feature!=="magic");
+ if(familiar) familiar.classList.toggle("feature-inactive",feature!=="familiar");
+ document.querySelectorAll("[data-special-choice]").forEach(btn=>{
+   const active=btn.dataset.specialChoice===feature;
+   btn.classList.toggle("active",active);
+   btn.setAttribute("aria-pressed",String(active));
+   btn.disabled=!canEditCharacter(p);
+ });
+ [ [magic,"magic"], [familiar,"familiar"] ].forEach(([section,kind])=>{
+   if(!section) return;
+   section.querySelectorAll("input, button").forEach(el=>{ el.disabled=!(canEditCharacter(p) && kind===feature); });
+ });
+}
+function selectSpecialFeature(feature){
+ if(!canEditCurrent() || !["magic","familiar"].includes(feature)) return;
+ const p=current();
+ if(p.specialFeature===feature) return;
+ p.specialFeature=feature;
+ persistQuiet();
+ renderSpecialFeature(p);
 }
 function renderExperienceRows(p){
  document.getElementById("experience").innerHTML=p.experience.map((t,i)=>`<tr><td class="ty"><select onchange="editTag(${i},'type',this.value)"><option ${t.type==="지식"?"selected":""}>지식</option><option ${t.type==="기능"?"selected":""}>기능</option></select></td><td class="nm"><input placeholder="태그 이름" value="${esc(t.name)}" oninput="editTag(${i},'name',this.value)"></td><td class="gr"><select onchange="editTag(${i},'grade',+this.value)"><option value="1" ${t.grade==1?"selected":""}>Ⅰ</option><option value="2" ${t.grade==2?"selected":""}>Ⅱ</option><option value="3" ${t.grade==3?"selected":""}>Ⅲ</option></select></td></tr>`).join("");
@@ -1222,6 +1317,27 @@ function renderMagic(){
  if(!e)return;
  e.innerHTML=p.magicUses.map((used,i)=>`<button type="button" class="magic-check ${used?"checked":""}" onclick="useMagic(${i})">${used?"☑":"☐"} 사용 ${i+1}</button>`).join("");
 }
+function toggleFamiliarWound(i){
+ if(!canEditCurrent()) return;
+ const p=current();
+ p.familiarWounds[i]=!p.familiarWounds[i];
+ persistQuiet();
+ renderFamiliar();
+}
+function useFamiliar(i){
+ if(!canEditCurrent()) return;
+ const p=current();
+ p.familiarUses[i]=!p.familiarUses[i];
+ persistQuiet();
+ renderFamiliar();
+}
+function renderFamiliar(){
+ const p=current();
+ const health=document.getElementById("familiarHealth");
+ const uses=document.getElementById("familiarUses");
+ if(health) health.innerHTML=p.familiarWounds.map((wounded,i)=>`<button type="button" class="magic-check familiar-heart ${wounded?"checked":""}" title="${i+1}번째 체력 칸 · 클릭해서 상처 ${wounded?"해제":"표시"}" onclick="toggleFamiliarWound(${i})">${wounded?"♡":"♥"} ${i+1}</button>`).join("");
+ if(uses) uses.innerHTML=p.familiarUses.map((used,i)=>`<button type="button" class="magic-check ${used?"checked":""}" onclick="useFamiliar(${i})">${used?"☑":"☐"} 사용 ${i+1}</button>`).join("");
+}
 function triggerPortraitUpload(){ document.getElementById("portraitFile").click(); }
 function handlePortraitUpload(input){
  if(!canEditCurrent()){ input.value=""; return; }
@@ -1291,7 +1407,10 @@ function renderSharedLog(){
  el.innerHTML=(db.logs||[]).slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
 function renderGM(){
- populateFields();
+ // renderAll() is also called by Firebase while a player is typing.
+ // Never repopulate player-sheet fields from the GM renderer unless the GM
+ // view is actually active; otherwise equipment/name inputs get overwritten.
+ if(currentView==="gm") populateFields();
  document.getElementById("gmSecretFor").textContent=esc(current().name||"이름 없음");
  document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${healthCurrent(p)}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
  document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${healthCurrent(p)}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
@@ -1308,6 +1427,7 @@ function addPC(){
  p.name="새 캐릭터";
  db.pcs.push(p);
  db.activeId=p.id;
+ renderedPlayerId=null;
  localStorage.setItem(KEY,JSON.stringify(db));
  renderAll();
  if(firebaseReady && roomRef && !applyingRemote) syncPlayerNode(PLAYER_ID);
@@ -1315,7 +1435,7 @@ function addPC(){
 }
 function clearLog(){if(!gmUnlocked){modalAlert("GM 권한이 필요합니다.");return;}db.logs=[];persistQuiet();renderGM();renderSharedLog();}
 function exportData(){collect();let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tag-and-dice-session.json";a.click();URL.revokeObjectURL(a.href)}
-function importData(){let i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=()=>{let f=i.files[0];if(!f)return;let r=new FileReader();r.onload=async()=>{try{db=JSON.parse(r.result);db.gmLock=db.gmLock||{enabled:false,pin:""};gmUnlocked=false;persist()}catch(e){await modalAlert("파일을 읽을 수 없습니다.")}};r.readAsText(f)};i.click()}
+function importData(){let i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=()=>{let f=i.files[0];if(!f)return;let r=new FileReader();r.onload=async()=>{try{db=JSON.parse(r.result);db.pcs=Array.isArray(db.pcs)?db.pcs:[];db.pcs.forEach(p=>{ensurePCOwner(p);normalizeFamiliar(p)});if(!db.pcs.some(p=>p.ownerId===PLAYER_ID))ensureMyCharacter();db.activeId=db.activeId&&db.pcs.some(p=>p.id===db.activeId)?db.activeId:db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;db.gmLock=db.gmLock||{enabled:false,pin:""};gmUnlocked=false;persist()}catch(e){await modalAlert("파일을 읽을 수 없습니다.")}};r.readAsText(f)};i.click()}
 async function exportImage(){
  if(typeof html2canvas==="undefined"){
   await modalAlert('이미지 저장 기능은 인터넷 연결이 필요합니다.\n대신 "인쇄 / PDF 저장" 버튼으로 내보내 보세요.');
