@@ -12,11 +12,17 @@
 - `webapp/test_app4.py` — 웹앱 회귀 테스트 스위트 (Playwright 기반). 화면 반응형 동작과 인쇄 출력 기하 구조를 함께 검증합니다.
 - `render.py`, `build_xlsx.py` — 캐릭터 시트 PDF/XLSX 생성 스크립트
 - 데이터 베이스는 파이어 베이스로 구성을 하였고 https://console.firebase.google.com/
-- 서버는 깃허브로 열었습니다
+- 서버는 깃허브로 열었습니다.
+
+## 룰북 사이트
+
+해당 링크로 접속하면 태그 앤 다이스의 전체적인 규칙을 확인할 수 있습니다.
+
+https://sites.google.com/view/tag-n-dice/%ED%91%9C%EC%A7%80
 
 ## 웹앱 사용법
 
-해당 링크를 열면 바로 사용할 수 있습니다. 별도 빌드 과정이 없습니다.
+해당 링크로 접속하면 바로 사용할 수 있습니다. 별도 빌드 과정이 없습니다.
 
 https://winti1114.github.io/tagndice/
 
