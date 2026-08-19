@@ -471,10 +471,10 @@ table.stuff-table input{width:100%}
  <div class="charbar">
   <label>캐릭터 보기</label>
   <select id="charSelect" onchange="setActive(this.value)"></select>
-  <button class="tbtn" onclick="addMyCharacter()">＋ 새 캐릭터</button>
+  <button class="tbtn" onclick="exportData()">저장</button>
+  <button class="tbtn" onclick="importData()">불러오기</button>
   <button class="tbtn" id="claimBtn" style="display:none" onclick="claimCharacter()">🔗 내 캐릭터로 가져오기</button>
   <button class="tbtn" onclick="resetCharacter()">초기화</button>
-  <button class="tbtn danger" onclick="deleteCharacter()">삭제</button>
  </div>
  <div class="exportbar">
   <button class="tbtn" onclick="window.print()">🖨️ 인쇄 / PDF 저장 (앞+뒤)</button>
@@ -1654,12 +1654,8 @@ function applySheetAccess(canEdit){
    claim.disabled=false;
    claim.title=claimable?"이 캐릭터를 지금 로그인한 계정의 캐릭터로 연결합니다.":"";
  }
- const add=document.querySelector('button[onclick="addMyCharacter()"]');
  const reset=document.querySelector('button[onclick="resetCharacter()"]');
- const del=document.querySelector('button[onclick="deleteCharacter()"]');
- if(add) add.disabled = myPCs().length>=1;
  if(reset) reset.disabled=!canEdit;
- if(del) del.disabled=!canEdit;
 }
 function renderSpecialFeature(p){
  const feature=p.specialFeature==="familiar" ? "familiar" : "magic";
