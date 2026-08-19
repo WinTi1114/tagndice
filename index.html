@@ -69,6 +69,25 @@ textarea,input,select{background:transparent;border:0;outline:0}
 .shared-log-wrap{background:var(--paper2);border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:14px}
 .shared-log-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800;color:var(--red);font-size:14px;margin-bottom:2px}
 .shared-log-wrap .log{height:120px;max-height:120px;min-height:24px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.session-notes-wrap{background:var(--paper2);border:1px solid var(--line);border-radius:7px;padding:10px 14px;margin-bottom:14px}
+.session-notes-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-weight:800;color:var(--red);font-size:14px;margin-bottom:0}
+.session-notes-wrap.open .session-notes-head{margin-bottom:8px}
+.player-session-toggle.open{background:var(--red);color:#fff8e9;border-color:var(--red)}
+.session-note-list{display:grid;gap:8px}
+.session-note-item{border:1px solid var(--line);background:#eee2c4;border-radius:6px;overflow:hidden}
+.session-note-item summary{cursor:pointer;padding:9px 11px;font-weight:700;color:var(--red);list-style:none}
+.session-note-item summary::-webkit-details-marker{display:none}
+.session-note-item summary:before{content:'▸';display:inline-block;margin-right:7px;color:#9a7d4d}
+.session-note-item[open] summary:before{content:'▾'}
+.session-note-body{padding:0 11px 11px;white-space:pre-wrap;line-height:1.65;font-size:13px;color:var(--ink)}
+.session-note-meta{font-size:11px;color:#9a7d4d;margin-top:6px}
+.gm-session-notes{border:1px solid var(--line);background:#eee2c4;padding:12px;border-radius:7px}
+.gm-session-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+.gm-session-toolbar select{border:1px solid var(--line);background:var(--paper);border-radius:5px;padding:6px 8px;min-width:180px}
+.gm-session-editor{display:grid;gap:8px}
+.gm-session-editor input,.gm-session-editor textarea{width:100%;border:1px solid var(--line);background:var(--white);border-radius:5px;padding:8px}
+.gm-session-editor textarea{min-height:190px;resize:vertical;line-height:1.65}
+.gm-session-empty{padding:12px;color:#927c59;font-size:12px}
 .modal-overlay{position:fixed;inset:0;background:rgba(30,20,10,.55);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
 .modal-box{background:var(--paper);border:2px solid #46351f;box-shadow:0 10px 40px rgba(0,0,0,.4);padding:20px;max-width:380px;width:100%}
 .modal-message{white-space:pre-line;margin-bottom:14px;line-height:1.6;font-size:14px}
@@ -487,6 +506,18 @@ table.stuff-table input{width:100%}
  <div id="sharedLog" class="log"></div>
 </div>
 
+<div class="session-notes-wrap">
+ <div class="session-notes-head">
+  <div class="gm-session-toolbar player-gm-session-toolbar">
+   <select id="playerGmSessionLogSelect" class="tbtn" onchange="selectPlayerSessionLog(this.value)">
+    <option value="">세션 기록 없음</option>
+   </select>
+   <span class="muted">GM이 작성한 세션 기록을 선택해서 열람할 수 있습니다</span>
+  </div>
+ </div>
+ <div id="playerSessionLogViewer" class="session-note-list" style="display:none"></div>
+</div>
+
 <div class="papers-viewport" id="papersViewport">
 <div class="papers-scroll" id="papersScroll">
 
@@ -696,6 +727,16 @@ table.stuff-table input{width:100%}
   <div class="panel" style="margin-top:14px"><div class="gm-secret"><h2>GM 메모 — <span id="gmSecretFor">이름 없음</span></h2><textarea id="secret" oninput="saveField()" placeholder="현재 선택된 캐릭터에 대한 GM 전용 메모입니다. 플레이어 시트 화면에는 표시되지 않습니다."></textarea></div></div>
   <div id="partyGrid" class="party-grid" style="margin-top:14px"></div>
   <div class="panel"><h2>세션 판정 로그</h2><div id="log" class="log"></div><button class="danger" style="margin-top:8px" onclick="clearLog()">로그 초기화</button></div>
+  <div class="panel"><h2>세션 기록</h2>
+   <div class="gm-session-notes">
+    <div class="gm-session-toolbar">
+     <select id="gmSessionLogSelect" onchange="selectSessionLog(this.value)"></select>
+     <button class="primary" onclick="addSessionLog()">＋ 새 세션 기록</button>
+     <button class="danger" onclick="deleteSessionLog()">삭제</button>
+    </div>
+    <div id="gmSessionLogEditor" class="gm-session-editor"></div>
+   </div>
+  </div>
  </section>
 </div>
 </section>
@@ -950,6 +991,7 @@ function pushOwnershipChange(previousOwner){
  updates.meta={
   gmLock: db.gmLock || {enabled:false,pin:"",ownerId:""},
   logs: Array.isArray(db.logs) ? db.logs : [],
+  sessionLogs: Array.isArray(db.sessionLogs) ? db.sessionLogs : [],
   updatedAt: Date.now()
  };
  roomRef.update(updates).catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
@@ -1016,6 +1058,9 @@ function mergeRoomSnapshot(payload){
  db.pcs.forEach(p=>{ normalizeFamiliar(p); p.ownerNickname=p.ownerNickname||"게스트"; });
  db.gmLock = payload.meta?.gmLock || payload.data?.gmLock || {enabled:false,pin:"",ownerId:""};
  db.logs = Array.isArray(payload.meta?.logs) ? payload.meta.logs : (Array.isArray(payload.data?.logs) ? payload.data.logs : []);
+ db.sessionLogs = Array.isArray(payload.meta?.sessionLogs) ? payload.meta.sessionLogs : (Array.isArray(payload.data?.sessionLogs) ? payload.data.sessionLogs : (db.sessionLogs||[]));
+ db.sessionLogs = db.sessionLogs.map(x=>({id:x?.id||crypto.randomUUID(),title:x?.title||"세션 기록",content:x?.content||"",updatedAt:x?.updatedAt||Date.now()}));
+ db.activeSessionLogId = db.sessionLogs.some(x=>x.id===db.activeSessionLogId) ? db.activeSessionLogId : (db.sessionLogs[0]?.id||null);
  // 중요: Firebase에서 다른 사용자의 시트가 변경되어도 현재 브라우저의
  // 선택(activeId)을 절대로 원격 데이터로 강제 변경하지 않습니다.
  // 이전 코드는 players[PLAYER_ID].activeId를 다시 적용하면서,
@@ -1105,6 +1150,7 @@ function syncPlayerNode(ownerId){
  updates.meta={
   gmLock: db.gmLock || {enabled:false,pin:"",ownerId:""},
   logs: Array.isArray(db.logs) ? db.logs : [],
+  sessionLogs: Array.isArray(db.sessionLogs) ? db.sessionLogs : [],
   updatedAt: Date.now()
  };
  roomRef.update(updates).catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
@@ -1380,7 +1426,10 @@ function normalizeFamiliar(p){
  while(p.magicUses.length<3) p.magicUses.push(false);
  return p;
 }
-let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],gmLock:{enabled:false,pin:"",ownerId:""}};
+let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],sessionLogs:[],activeSessionLogId:null,activePlayerSessionLogId:null,gmLock:{enabled:false,pin:"",ownerId:""}};
+db.sessionLogs = Array.isArray(db.sessionLogs) ? db.sessionLogs : [];
+db.activeSessionLogId = db.activeSessionLogId || db.sessionLogs[0]?.id || null;
+db.activePlayerSessionLogId = db.activePlayerSessionLogId || null;
 db.pcs = Array.isArray(db.pcs) ? db.pcs : [];
 // 기존 로컬 저장 데이터에는 ownerId가 없으므로 현재 브라우저의 소유권으로 이전합니다.
 db.pcs.forEach(ensurePCOwner);
@@ -1409,6 +1458,8 @@ if(!db.pcs.some(p=>p.ownerId===PLAYER_ID)) ensureMyCharacter();
 const myInitialPC = db.pcs.find(p=>p.ownerId===PLAYER_ID);
 db.activeId = myInitialPC?.id || (db.activeId && db.pcs.some(p=>p.id===db.activeId) ? db.activeId : db.pcs[0]?.id || null);
 db.gmLock = db.gmLock || {enabled:false,pin:""};
+db.sessionLogs = Array.isArray(db.sessionLogs) ? db.sessionLogs.map(x=>({id:x?.id||crypto.randomUUID(),title:x?.title||"세션 기록",content:x?.content||"",updatedAt:x?.updatedAt||Date.now()})) : [];
+db.activeSessionLogId = db.sessionLogs.some(x=>x.id===db.activeSessionLogId) ? db.activeSessionLogId : (db.sessionLogs[0]?.id||null);
 let gmUnlocked = false;
 db.pcs.forEach(p=>{
   p.maxHealth=Math.min(10,p.maxHealth||5); p.maxMind=Math.min(10,p.maxMind||3); p.maxFatigue=Math.min(10,p.maxFatigue||3);
@@ -1588,14 +1639,25 @@ async function deleteCharacterById(id){
 async function resetCharacter(){
  const p=current();
  if(!canEditCharacter(p)){ await modalAlert("현재 시트는 읽기 전용입니다. 본인 시트 또는 마스터 권한에서만 초기화할 수 있습니다."); return; }
+ const resetTargetId=p.id;
+ // GM이 다른 플레이어 시트를 편집 중일 때 초기화가 GM 본인 시트로
+ // 선택 대상을 바꾸지 않도록, 클릭 당시의 activeId를 별도로 보존합니다.
+ const activeIdBeforeReset=db.activeId;
  const isMine=p.ownerId===PLAYER_ID;
  const ok=await modalConfirm(`'${p.name||"이름 없음"}' 캐릭터의 모든 내용을 초기화할까요?\n${isMine?"본인 시트": "마스터 권한"}으로 이름·태그·자원·백스토리 등을 빈 캐릭터로 되돌립니다.`);
  if(!ok) return;
- const idx=db.pcs.findIndex(x=>x.id===p.id);
+ const idx=db.pcs.findIndex(x=>x.id===resetTargetId);
  if(idx<0)return;
  const fresh=blankPC();
- fresh.id=p.id; fresh.ownerId=p.ownerId;
- db.pcs[idx]=fresh; db.activeId=fresh.id; renderedPlayerId=null;
+ // 초기화는 데이터만 새 빈 시트로 교체하고 소유자는 절대 바꾸지 않습니다.
+ fresh.id=resetTargetId;
+ fresh.ownerId=p.ownerId;
+ fresh.ownerNickname=p.ownerNickname||"게스트";
+ db.pcs[idx]=fresh;
+ // 현재 선택된 시트를 유지합니다. 선택 대상이 그 사이 삭제된 경우에만
+ // 초기화 대상 시트로 안전하게 돌아갑니다. GM의 본인 시트로 전환되지 않습니다.
+ db.activeId=db.pcs.some(x=>x.id===activeIdBeforeReset) ? activeIdBeforeReset : resetTargetId;
+ renderedPlayerId=null;
  persist();
 }
 // 초기 부팅 중 새 임시 사용자의 시트를 만들 때도 안전하게 초기화되도록
@@ -1885,15 +1947,119 @@ function renderSharedLog(){
  if(!el) return;
  el.innerHTML=(db.logs||[]).slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
+function renderPlayerSessionLogSelect(){
+ const select=document.getElementById("playerGmSessionLogSelect");
+ const viewer=document.getElementById("playerSessionLogViewer");
+ if(!select||!viewer) return;
+ const list=Array.isArray(db.sessionLogs)?db.sessionLogs.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)):[];
+ const currentId=select.value||db.activePlayerSessionLogId||db.sessionLogs?.[0]?.id||"";
+ select.innerHTML=list.length ? '<option value="">GM 세션 기록 선택</option>'+list.map(x=>`<option value="${esc(x.id)}">${esc(x.title||"세션 기록")}</option>`).join("") : '<option value="">세션 기록 없음</option>';
+ if(list.some(x=>x.id===currentId)) select.value=currentId;
+ else select.value="";
+ if(!select.value){
+  viewer.style.display="none";
+  viewer.innerHTML="";
+ }
+}
+function selectPlayerSessionLog(id){
+ const select=document.getElementById("playerGmSessionLogSelect");
+ const viewer=document.getElementById("playerSessionLogViewer");
+ if(!select||!viewer)return;
+ const item=sessionLogById(id);
+ db.activePlayerSessionLogId=id||null;
+ if(!item){viewer.style.display="none";viewer.innerHTML="";return;}
+ viewer.style.display="block";
+ viewer.innerHTML=`<div class="session-note-item open"><div class="session-note-title">${esc(item.title||"세션 기록")}</div><div class="session-note-body">${esc(item.content||"").replace(/\n/g,"<br>")||'<span class="muted">기록 내용이 없습니다.</span>'}<div class="session-note-meta">마지막 수정 · ${item.updatedAt?new Date(item.updatedAt).toLocaleString():"-"}</div></div></div>`;
+}
+function sessionLogById(id){ return (db.sessionLogs||[]).find(x=>x.id===id)||null; }
+function sessionLogEditorHasFocus(){
+ const editor=document.getElementById("gmSessionLogEditor");
+ const a=document.activeElement;
+ return !!(editor && a && editor.contains(a) && /^(INPUT|TEXTAREA)$/.test(a.tagName));
+}
+function renderSessionLogEditor(force=false){
+ const select=document.getElementById("gmSessionLogSelect");
+ const editor=document.getElementById("gmSessionLogEditor");
+ if(!select||!editor) return;
+ if(!force && sessionLogEditorHasFocus()) return;
+ const list=Array.isArray(db.sessionLogs)?db.sessionLogs:[];
+ if(!list.length){
+  select.innerHTML='<option value="">세션 기록 없음</option>';
+  select.value="";
+  editor.innerHTML='<div class="gm-session-empty">새 세션 기록을 만들어 기록을 시작하세요.</div>';
+  return;
+ }
+ let active=sessionLogById(db.activeSessionLogId)||list[0];
+ db.activeSessionLogId=active.id;
+ select.innerHTML=list.map(x=>`<option value="${esc(x.id)}">${esc(x.title||"세션 기록")}</option>`).join("");
+ select.value=active.id;
+ editor.innerHTML=`<input id="gmSessionTitle" value="${esc(active.title||"")}" placeholder="세션 제목" oninput="editSessionLogField('title',this.value)"><textarea id="gmSessionContent" placeholder="이번 세션에서 있었던 사건, NPC, 진행 상황, 다음 세션 준비사항 등을 기록하세요." oninput="editSessionLogField('content',this.value)">${esc(active.content||"")}</textarea>`;
+}
+function selectSessionLog(id){
+ if(!sessionLogById(id)) return;
+ db.activeSessionLogId=id;
+ renderSessionLogEditor();
+}
+let sessionLogSyncTimer=null;
+function scheduleSessionLogSync(){
+ if(sessionLogSyncTimer) clearTimeout(sessionLogSyncTimer);
+ sessionLogSyncTimer=setTimeout(()=>{sessionLogSyncTimer=null;pushToRoom();},180);
+}
+function editSessionLogField(field,value){
+ if(!gmUnlocked) return;
+ const item=sessionLogById(db.activeSessionLogId);
+ if(!item) return;
+ item[field]=value;
+ item.updatedAt=Date.now();
+ try{localStorage.setItem(KEY,JSON.stringify(db));cacheMyRoomSheet();}catch(e){}
+ // 입력 중에는 편집창 DOM을 다시 만들지 않아 한글 IME와 커서가 끊기지 않게 합니다.
+ // 또한 짧게 묶어서 동기화해 글자 하나마다 Firebase 요청이 발생하지 않게 합니다.
+ scheduleSessionLogSync();
+ renderPlayerSessionLogSelect();
+}
+document.addEventListener("focusout",e=>{
+ if(e.target && (e.target.id==="gmSessionTitle" || e.target.id==="gmSessionContent")){
+  setTimeout(()=>{
+   if(sessionLogSyncTimer){ clearTimeout(sessionLogSyncTimer); sessionLogSyncTimer=null; }
+   pushToRoom();
+   renderSessionLogEditor(true);
+  },0);
+ }
+});
+function addSessionLog(){
+ if(!gmUnlocked){modalAlert("GM 권한이 필요합니다.");return;}
+ const idx=(db.sessionLogs||[]).length+1;
+ const item={id:crypto.randomUUID(),title:`세션 ${idx}`,content:"",updatedAt:Date.now()};
+ if(!Array.isArray(db.sessionLogs)) db.sessionLogs=[];
+ db.sessionLogs.push(item);
+ db.activeSessionLogId=item.id;
+ persistQuiet();
+ renderGM();
+ renderPlayerSessionLogSelect();
+}
+async function deleteSessionLog(){
+ if(!gmUnlocked){await modalAlert("GM 권한이 필요합니다.");return;}
+ const item=sessionLogById(db.activeSessionLogId);
+ if(!item) return;
+ const ok=await modalConfirm(`'${item.title||"세션 기록"}'을 삭제할까요?`);
+ if(!ok) return;
+ db.sessionLogs=db.sessionLogs.filter(x=>x.id!==item.id);
+ db.activeSessionLogId=db.sessionLogs[db.sessionLogs.length-1]?.id||null;
+ persistQuiet();
+ renderGM();
+ renderPlayerSessionLogSelect();
+}
 function renderGM(){
  // renderAll() is also called by Firebase while a player is typing.
  // Never repopulate player-sheet fields from the GM renderer unless the GM
  // view is actually active; otherwise equipment/name inputs get overwritten.
  if(currentView==="gm") populateFields();
+ if(currentView==="gm") renderSessionLogEditor();
  document.getElementById("gmSecretFor").textContent=esc(current().name||"이름 없음");
  document.getElementById("pcList").innerHTML=db.pcs.map(p=>`<div class="session-card ${p.id===db.activeId?"active":""}" onclick="setActive('${p.id}')"><div class="session-card-top"><b>${esc(p.name||"이름 없음")}</b><button class="mini" title="삭제" onclick="event.stopPropagation();deleteCharacterById('${p.id}')">✕</button></div><div class="muted">${esc(p.ownerNickname||"게스트")} · ${healthCurrent(p)}/${p.maxHealth} ♥ · ${p.mind}/${p.maxMind} 정신 · ${p.fatigue}/${p.maxFatigue} 피로</div></div>`).join("");
  document.getElementById("partyGrid").innerHTML=db.pcs.map(p=>{let sum=experienceSum(p);return `<div class="party-sheet"><h3>${esc(p.name||"이름 없음")}</h3><div class="muted">플레이어: ${esc(p.ownerNickname||"게스트")} · ${esc(p.race)} · ${esc(p.background)} · 레벨 ${["Ⅰ","Ⅱ","Ⅲ","Ⅳ","Ⅴ"][levelIndex(sum)]}</div><div class="pc-status" style="margin-top:8px"><span>♥ ${healthCurrent(p)}/${p.maxHealth}</span><span>정신 ${p.mind}/${p.maxMind}</span><span>피로 ${p.fatigue}/${p.maxFatigue}</span><span>침식 ${p.erosion.filter(Boolean).length}/3</span></div><div class="party-tags" style="margin-top:8px">${p.experience.filter(t=>t.name.trim()).map(t=>`<span class="tagchip">${esc(t.name)} · ${["","Ⅰ","Ⅱ","Ⅲ"][t.grade]}</span>`).join("")||'<span class="muted">경험 태그 없음</span>'}</div><div style="margin-top:10px"><button onclick="setActive('${p.id}');mode('player')">시트 열기</button></div></div>`}).join("");
  document.getElementById("log").innerHTML=db.logs.slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
+ renderSessionLogEditor();
 }
 function addPC(){
  const mine=myPCs();
@@ -1914,7 +2080,7 @@ function addPC(){
 }
 function clearLog(){if(!gmUnlocked){modalAlert("GM 권한이 필요합니다.");return;}db.logs=[];persistQuiet();renderGM();renderSharedLog();}
 function exportData(){collect();let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tag-and-dice-session.json";a.click();URL.revokeObjectURL(a.href)}
-function importData(){let i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=()=>{let f=i.files[0];if(!f)return;let r=new FileReader();r.onload=async()=>{try{db=JSON.parse(r.result);db.pcs=Array.isArray(db.pcs)?db.pcs:[];db.pcs.forEach(p=>{ensurePCOwner(p);normalizeFamiliar(p)});if(!db.pcs.some(p=>p.ownerId===PLAYER_ID))ensureMyCharacter();db.activeId=db.activeId&&db.pcs.some(p=>p.id===db.activeId)?db.activeId:db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;db.gmLock=db.gmLock||{enabled:false,pin:""};gmUnlocked=false;persist()}catch(e){await modalAlert("파일을 읽을 수 없습니다.")}};r.readAsText(f)};i.click()}
+function importData(){let i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=()=>{let f=i.files[0];if(!f)return;let r=new FileReader();r.onload=async()=>{try{db=JSON.parse(r.result);db.pcs=Array.isArray(db.pcs)?db.pcs:[];db.pcs.forEach(p=>{ensurePCOwner(p);normalizeFamiliar(p)});if(!db.pcs.some(p=>p.ownerId===PLAYER_ID))ensureMyCharacter();db.activeId=db.activeId&&db.pcs.some(p=>p.id===db.activeId)?db.activeId:db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;db.gmLock=db.gmLock||{enabled:false,pin:""};db.sessionLogs=Array.isArray(db.sessionLogs)?db.sessionLogs:[];db.activeSessionLogId=db.sessionLogs.some(x=>x.id===db.activeSessionLogId)?db.activeSessionLogId:(db.sessionLogs[0]?.id||null);gmUnlocked=false;persist()}catch(e){await modalAlert("파일을 읽을 수 없습니다.")}};r.readAsText(f)};i.click()}
 async function exportImage(){
  if(typeof html2canvas==="undefined"){
   await modalAlert('이미지 저장 기능은 인터넷 연결이 필요합니다.\n대신 "인쇄 / PDF 저장" 버튼으로 내보내 보세요.');
@@ -1936,7 +2102,7 @@ async function exportImage(){
  }
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-function renderAll(){renderPlayer();renderGM();renderSharedLog()}
+function renderAll(){renderPlayer();renderGM();renderSharedLog();renderPlayerSessionLogSelect()}
 renderAll();
 
 async function bootApp(){
