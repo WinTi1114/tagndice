@@ -1947,11 +1947,22 @@ function renderSharedLog(){
  if(!el) return;
  el.innerHTML=(db.logs||[]).slice().reverse().map(x=>`<div>${esc(x)}</div>`).join("")||'<span class="muted">판정 로그 없음</span>';
 }
+function sortSessionLogsByNumber(list){
+ return list.slice().sort((a,b)=>{
+  const aMatch=String(a.title||"").match(/(\\d+)/);
+  const bMatch=String(b.title||"").match(/(\\d+)/);
+  const aNum=aMatch?Number(aMatch[1]):Infinity;
+  const bNum=bMatch?Number(bMatch[1]):Infinity;
+  if(aNum!==bNum) return aNum-bNum;
+  return String(a.title||"").localeCompare(String(b.title||""));
+ });
+}
 function renderPlayerSessionLogSelect(){
  const select=document.getElementById("playerGmSessionLogSelect");
  const viewer=document.getElementById("playerSessionLogViewer");
  if(!select||!viewer) return;
- const list=Array.isArray(db.sessionLogs)?db.sessionLogs.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)):[];
+ // 세션 기록은 숫자 기준으로 낮은 번호부터 표시: 세션 1, 세션 2, 세션 3 ...
+ const list=Array.isArray(db.sessionLogs)?sortSessionLogsByNumber(db.sessionLogs):[];
  const currentId=select.value||db.activePlayerSessionLogId||db.sessionLogs?.[0]?.id||"";
  select.innerHTML=list.length ? '<option value="">GM 세션 기록 선택</option>'+list.map(x=>`<option value="${esc(x.id)}">${esc(x.title||"세션 기록")}</option>`).join("") : '<option value="">세션 기록 없음</option>';
  if(list.some(x=>x.id===currentId)) select.value=currentId;
@@ -1982,7 +1993,7 @@ function renderSessionLogEditor(force=false){
  const editor=document.getElementById("gmSessionLogEditor");
  if(!select||!editor) return;
  if(!force && sessionLogEditorHasFocus()) return;
- const list=Array.isArray(db.sessionLogs)?db.sessionLogs:[];
+ const list=Array.isArray(db.sessionLogs)?sortSessionLogsByNumber(db.sessionLogs):[];
  if(!list.length){
   select.innerHTML='<option value="">세션 기록 없음</option>';
   select.value="";
@@ -1991,6 +2002,7 @@ function renderSessionLogEditor(force=false){
  }
  let active=sessionLogById(db.activeSessionLogId)||list[0];
  db.activeSessionLogId=active.id;
+ // GM 쪽 세션 선택도 동일하게 낮은 번호부터 정렬합니다.
  select.innerHTML=list.map(x=>`<option value="${esc(x.id)}">${esc(x.title||"세션 기록")}</option>`).join("");
  select.value=active.id;
  editor.innerHTML=`<input id="gmSessionTitle" value="${esc(active.title||"")}" placeholder="세션 제목" oninput="editSessionLogField('title',this.value)"><textarea id="gmSessionContent" placeholder="이번 세션에서 있었던 사건, NPC, 진행 상황, 다음 세션 준비사항 등을 기록하세요." oninput="editSessionLogField('content',this.value)">${esc(active.content||"")}</textarea>`;
