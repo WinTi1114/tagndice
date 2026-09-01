@@ -527,7 +527,8 @@ table.stuff-table input{width:100%}
  <div class="charbar">
   <label>캐릭터 보기</label>
   <select id="charSelect" onchange="setActive(this.value)"></select>
-  <button class="tbtn" onclick="exportData()">저장</button>
+  <button class="tbtn" onclick="exportCharacter()">🧍 이 시트 저장</button>
+  <button class="tbtn" onclick="exportData()">전체 저장</button>
   <button class="tbtn" onclick="importData()">불러오기</button>
   <button class="tbtn" id="claimBtn" style="display:none" onclick="claimCharacter()">🔗 내 캐릭터로 가져오기</button>
   <button class="tbtn" onclick="resetCharacter()">초기화</button>
@@ -753,7 +754,7 @@ table.stuff-table input{width:100%}
  <aside class="gm-sidebar">
   <h2 style="color:var(--red);margin-top:0">GM 세션</h2>
   <div class="muted">현재 브라우저 프로토타입 · 여러 PC를 하나의 파티로 관리</div>
-  <div style="margin:12px 0" class="actions"><button class="primary" onclick="addPC()">＋ 플레이어 추가</button><button onclick="exportData()">저장</button><button onclick="importData()">불러오기</button><button onclick="toggleGmLock()">🔒 GM 잠금</button></div>
+  <div style="margin:12px 0" class="actions"><button class="primary" onclick="addPC()">＋ 플레이어 추가</button><button onclick="exportCharacter()">🧍 이 시트 저장</button><button onclick="exportData()">전체 저장</button><button onclick="importData()">불러오기</button><button onclick="toggleGmLock()">🔒 GM 잠금</button></div>
   <div style="margin:12px 0" class="actions"><button id="gmHideSheetBtn" onclick="toggleGmOption('hideOwnSheet')">🙈 내 시트 숨김</button><button id="gmHideRollBtn" onclick="toggleGmOption('hideRollDetail')">🎲 판정 결과 비공개</button></div>
   <div class="muted" id="gmOptionHint" style="margin:-4px 0 10px;font-size:11.5px;line-height:1.6"></div>
   <div id="pcList"></div>
@@ -965,6 +966,8 @@ function ensureMyCharacter(){
 function roomSheetCacheKeyFor(ownerId,room){ return `${ROOM_SHEET_CACHE_PREFIX}:${ownerId}:${encodeURIComponent(room||"")}`; }
 function roomSheetCacheKey(room){ return roomSheetCacheKeyFor(PLAYER_ID,room); }
 function readRoomSheetCache(room){
+ // 방 코드가 있을 때만 쓰는 캐시입니다. 혼자 쓰기 방은 방 데이터와 완전히
+ // 분리된 자체 저장 공간(SOLO_KEY)을 쓰므로 이 캐시를 쓰지 않습니다.
  if(!room) return null;
  const tryKey=(ownerId)=>{
   try{
@@ -988,6 +991,8 @@ function readRoomSheetCache(room){
  return null;
 }
 function cacheMyRoomSheet(){
+ // 방에 접속했을 때만 방 코드별 백업을 남깁니다.
+ // (혼자 쓰기 방은 별도 저장 공간을 쓰므로 여기서 아무것도 하지 않습니다)
  if(!currentRoom || !db?.pcs) return;
  const mine=db.pcs.find(p=>p.ownerId===PLAYER_ID);
  if(!mine) return;
@@ -1092,7 +1097,7 @@ async function claimCharacter(){
  const removedIds=mine.map(x=>x.id);
  db.pcs=db.pcs.filter(x=>!removedIds.includes(x.id));
  const previousOwner=takeOverSheet(p);
- localStorage.setItem(KEY,JSON.stringify(db));
+ saveLocalDb();
  cacheMyRoomSheet();
  renderAll();
  pushOwnershipChange(previousOwner);
@@ -1160,8 +1165,12 @@ function mergeRoomSnapshot(payload){
  return true;
 }
 
+/* 부팅 시 저장된 방에 접속합니다.
+   방 이동은 moveToRoom()(새로고침)으로만 하므로, 이 함수는 항상
+   "그 방의 저장 공간으로 막 부팅한 상태"에서만 호출됩니다. */
 function joinRoom(room){
  if(!isLoggedIn()){ setSyncStatus("로그인 필요"); return; }
+ if(!room){ setSyncStatus("혼자 쓰기 방 (방과 완전 분리)"); return; }
  collect();
  cacheMyRoomSheet();
  currentRoom = room;
@@ -1242,20 +1251,117 @@ function pushToRoom(){
  syncPlayerNode(ownerId);
 }
 
+/* ---------- 방 이동 (공통) ----------
+   방 ↔ 방, 방 ↔ 혼자 쓰기 방 이동은 모두 이 함수를 지납니다.
+   지금 있는 곳의 데이터를 "그곳의 저장 공간"에만 저장하고, 실시간 연결을
+   끊은 뒤 새로고침으로 목적지의 저장 공간을 처음부터 읽습니다.
+   메모리에 남은 값이 다음 방으로 딸려가지 않게 하려는 것입니다. */
+function moveToRoom(room){
+ const target=String(room||"").trim();
+ // 지금 있는 곳의 상태를 그곳의 저장 공간에만 남깁니다.
+ collect();
+ cacheMyRoomSheet();
+ saveLocalDb();
+ if(roomRef){ roomRef.off(); roomRef=null; }
+ if(target) localStorage.setItem(ROOM_KEY,target);
+ else localStorage.removeItem(ROOM_KEY);
+ // 새로고침하면 부팅 시 목적지(방 또는 혼자 쓰기)의 저장 공간만 읽습니다.
+ location.reload();
+}
+
+/* ---------- 혼자 쓰기 방으로 이동 ----------
+   예전에는 로그아웃 후 방 코드 없이 다시 로그인해야만 혼자 쓰기 모드로
+   돌아갈 수 있었습니다. 이제 로그인 상태에서도 바로 이동할 수 있고,
+   혼자 쓰기 방은 어떤 방(1번방·2번방…)의 값도 반영되지 않는 완전히
+   독립된 공간입니다. 방의 내 시트는 그 방에 그대로 남습니다. */
+async function goSoloRoom(){
+ if(!isLoggedIn()){
+  await modalAlert("먼저 로그인해 주세요.\n오른쪽 위 '로그인' 버튼으로 임시 로그인할 수 있습니다.");
+  return;
+ }
+ if(!currentRoom){
+  await modalAlert("이미 혼자 쓰기 방입니다. (방에 접속하지 않음)");
+  return;
+ }
+ const ok = await modalConfirm(`혼자 쓰기 방으로 이동할까요?\n혼자 쓰기 방은 방과 완전히 분리된 공간이라, 방(${currentRoom})의 캐릭터·기록은 따라오지 않습니다.\n방 데이터는 삭제되지 않으며 같은 방 코드로 다시 접속하면 그대로 이어집니다.`);
+ if(!ok) return;
+ moveToRoom("");
+}
+
 async function changeRoom(){
  if(!isLoggedIn()){
   await modalAlert("먼저 로그인해 주세요.\n오른쪽 위 '로그인' 버튼으로 임시 로그인할 수 있습니다.");
   return;
  }
- const val = await modalPrompt("함께 쓸 방 코드를 입력하세요.\n(같은 코드를 입력한 사람끼리 실시간으로 파티 데이터를 공유합니다)", currentRoom);
+ if(currentRoom){
+  // 방에 접속 중일 때는 "코드 변경"과 "혼자 쓰기 방으로 이동" 중에서 고릅니다.
+  const pick = await modalChoice(`접속한 방: ${currentRoom}`,[
+   {label:"방 코드 변경",value:"change",primary:true},
+   {label:"혼자 쓰기 방으로 이동",value:"solo"}
+  ]);
+  if(pick===null) return;
+  if(pick==="solo"){ await goSoloRoom(); return; }
+ }
+ const val = await modalPrompt("함께 쓸 방 코드를 입력하세요.\n(같은 코드를 입력한 사람끼리 실시간으로 파티 데이터를 공유합니다)\n비워 두고 확인하면 혼자 쓰기 방으로 이동합니다.", currentRoom);
  if(val===null) return;
  const room = val.trim();
- if(!room) return;
- joinRoom(room);
- setTemporaryLoginUI();
+ if(!room){
+  // 코드를 비우고 확인하면 혼자 쓰기 방으로 이동합니다.
+  if(currentRoom) await goSoloRoom();
+  return;
+ }
+ if(room===currentRoom) return;
+ // 방마다 저장 공간이 다르므로, 이동은 항상 새로고침을 거칩니다.
+ moveToRoom(room);
 }
 
 const KEY="tagdice_v2";
+
+/* ---------- 저장 공간 분리 (혼자 쓰기 방 ↔ 각 방) ----------
+   예전에는 방에 있든 혼자 쓰든 로컬 저장을 한 곳(KEY)에 했기 때문에,
+   1번방/2번방에서 쓰던 캐릭터·로그·세션 기록이 혼자 쓰기 방에도 그대로
+   따라 들어왔습니다. 이제 저장 키 자체를 다음처럼 나눕니다.
+     혼자 쓰기 방 : tagdice_v2_solo
+     1번방        : tagdice_v2_room_1번방
+     2번방        : tagdice_v2_room_2번방  …
+   덕분에 혼자 쓰기 방은 어떤 방의 값도 반영되지 않는 완전히 독립된
+   공간이 되고, 반대로 혼자 쓰기 데이터가 방에 올라가지도 않습니다. */
+const SOLO_KEY = KEY + "_solo";
+const LOCAL_SPLIT_FLAG = "tagdice_local_split_v1";
+function localDbKeyFor(room){ return room ? `${KEY}_room_${encodeURIComponent(room)}` : SOLO_KEY; }
+function localDbKey(){ return localDbKeyFor(currentRoom); }
+function saveLocalDb(){
+ try{ localStorage.setItem(localDbKey(),JSON.stringify(db)); }
+ catch(e){ console.warn("로컬 저장에 실패했습니다.",e); }
+}
+function readLocalDb(room){
+ try{ return JSON.parse(localStorage.getItem(localDbKeyFor(room))||"null"); }
+ catch(e){ return null; }
+}
+/* 예전 버전에서 쓰던 통합 저장(KEY)은, 업그레이드 직후 한 번만
+   "지금 있는 곳"(방이면 그 방, 아니면 혼자 쓰기 방)으로 옮깁니다.
+   혼자 쓰기 방으로 옮길 때는 예전에 방에서 섞여 들어온 흔적
+   (다른 사람 시트·공유 다이스 로그·GM 잠금)을 함께 정리합니다.
+   원본은 KEY에 그대로 남겨 두므로 데이터가 사라지지는 않습니다. */
+(function migrateLegacyLocalDb(){
+ try{
+  if(localStorage.getItem(LOCAL_SPLIT_FLAG)) return;
+  const legacy=localStorage.getItem(KEY);
+  if(legacy && !localStorage.getItem(localDbKey())){
+   let data=null;
+   try{ data=JSON.parse(legacy); }catch(e){ data=null; }
+   if(data && !currentRoom){
+    const owners=new Set([PLAYER_ID,...readKnownOwnerIds()].filter(Boolean));
+    data.pcs=(Array.isArray(data.pcs)?data.pcs:[]).filter(p=>p && owners.has(p.ownerId));
+    data.logs=[];
+    data.gmLock={enabled:false,pin:"",ownerId:""};
+    data.gmOptions={ownerId:"",hideOwnSheet:true,hideRollDetail:true};
+   }
+   localStorage.setItem(localDbKey(), data?JSON.stringify(data):legacy);
+  }
+  localStorage.setItem(LOCAL_SPLIT_FLAG,"1");
+ }catch(e){}
+})();
 
 /* ---------- custom modal system ----------
    Native confirm()/prompt()/alert() are unreliable inside sandboxed preview
@@ -1416,7 +1522,7 @@ function setTemporaryLoginUI(){
   btn.title=isLoggedIn() ? "임시 로그인 관리" : "임시 로그인 (로그인해야 시트를 사용할 수 있습니다)";
   btn.classList.toggle("logged-in",isLoggedIn());
  }
- if(who) who.textContent=isLoggedIn() ? (currentRoom ? `방 ${currentRoom}` : "방 미접속") : "로그인 필요";
+ if(who) who.textContent=isLoggedIn() ? (currentRoom ? `방 ${currentRoom}` : "혼자 쓰기 방") : "로그인 필요";
 }
 /* ---------- 규칙 요약본 사이드 패널 ----------
    시트 뒷면의 규칙 요약본을 그대로 복사해 화면 옆에 띄웁니다.
@@ -1488,7 +1594,7 @@ async function openLoginDialog(){
   [
    {key:"nickname",label:"닉네임 (필수)",value:TEMP_LOGIN?.nickname||"",maxLength:16,placeholder:"예: 루카"},
    {key:"pin",label:"PIN (선택)",type:"password",maxLength:12,hint:"PIN을 정해두면 다른 사람이 같은 닉네임으로 접속할 수 없습니다."},
-   {key:"room",label:"방 코드 (선택)",value:currentRoom||"",placeholder:"같은 코드를 쓰는 사람끼리 파티 공유",hint:"비워두면 이 브라우저에만 저장되는 혼자 쓰기 모드로 시작합니다."}
+   {key:"room",label:"방 코드 (선택)",value:currentRoom||"",placeholder:"같은 코드를 쓰는 사람끼리 파티 공유",hint:"비워두면 방과 완전히 분리된 혼자 쓰기 방(이 브라우저에만 저장)으로 시작합니다."}
   ],
   "로그인"
  );
@@ -1508,6 +1614,10 @@ async function openLoginDialog(){
  rememberOwnerId(PLAYER_ID);
  TEMP_LOGIN={id:check.id,nickname};
  localStorage.setItem(TEMP_LOGIN_KEY,JSON.stringify(TEMP_LOGIN));
+ // 지금 있는 곳(방 또는 혼자 쓰기)의 상태는 그곳의 저장 공간에만 남깁니다.
+ collect();
+ cacheMyRoomSheet();
+ saveLocalDb();
  if(room) localStorage.setItem(ROOM_KEY,room); else localStorage.removeItem(ROOM_KEY);
  setSyncStatus("로그인 완료 · 캐릭터 불러오는 중…");
  // 사용자 ID가 바뀌면 시트 소유권 계산이 전부 달라지므로, 저장 후
@@ -1520,15 +1630,19 @@ async function manageTemporaryLogin(){
  const action=await modalChoice(`현재 임시 로그인: ${TEMP_LOGIN.nickname}\n${currentRoom?`접속한 방: ${currentRoom}`:"방에 접속하지 않음 (혼자 쓰기)"}`,[
   {label:"다른 계정으로 로그인",value:"switch",primary:true},
   {label:"방 코드 변경",value:"room"},
+  // 로그인 상태에서도 로그아웃 없이 혼자 쓰기 방으로 나갈 수 있습니다.
+  ...(currentRoom?[{label:"혼자 쓰기 방으로 이동",value:"solo"}]:[]),
   {label:"로그아웃",value:"logout"}
  ]);
  if(action==="switch"){ await openLoginDialog(); return; }
  if(action==="room"){ await changeRoom(); return; }
+ if(action==="solo"){ await goSoloRoom(); return; }
  if(action==="logout"){
   const ok=await modalConfirm("로그아웃할까요?\n캐릭터와 방 데이터는 삭제되지 않으며, 다시 같은 닉네임으로 로그인하면 그대로 불러옵니다.");
   if(!ok) return;
   collect();
   cacheMyRoomSheet();
+  saveLocalDb();
   localStorage.removeItem(TEMP_LOGIN_KEY);
   TEMP_LOGIN=null;
   if(roomRef){ roomRef.off(); roomRef=null; }
@@ -1567,7 +1681,7 @@ function normalizeFamiliar(p){
  while(p.magicUses.length<3) p.magicUses.push(false);
  return p;
 }
-let db=JSON.parse(localStorage.getItem(KEY)||"null")||{activeId:null,pcs:[blankPC()],logs:[],sessionLogs:[],activeSessionLogId:null,activePlayerSessionLogId:null,gmLock:{enabled:false,pin:"",ownerId:""}};
+let db=readLocalDb(currentRoom)||{activeId:null,pcs:[blankPC()],logs:[],sessionLogs:[],activeSessionLogId:null,activePlayerSessionLogId:null,gmLock:{enabled:false,pin:"",ownerId:""}};
 db.sessionLogs = Array.isArray(db.sessionLogs) ? db.sessionLogs : [];
 db.activeSessionLogId = db.activeSessionLogId || db.sessionLogs[0]?.id || null;
 db.activePlayerSessionLogId = db.activePlayerSessionLogId || null;
@@ -1651,9 +1765,9 @@ function canEditCurrent(){ return canEditCharacter(current()); }
    persistQuiet(): just writes localStorage. Pair it with a small, targeted
    DOM update (or none) for anything typed into a field that already shows
    what was typed on its own. */
-function persist(){localStorage.setItem(KEY,JSON.stringify(db));cacheMyRoomSheet();renderAll();pushToRoom()}
+function persist(){saveLocalDb();cacheMyRoomSheet();renderAll();pushToRoom()}
 function persistQuiet(){
- try{ localStorage.setItem(KEY,JSON.stringify(db)); cacheMyRoomSheet(); }
+ try{ saveLocalDb(); cacheMyRoomSheet(); }
  catch(e){ modalAlert("저장 공간이 부족합니다. 초상화 이미지가 너무 많거나 커서 브라우저 저장 한도를 넘었을 수 있어요."); }
  pushToRoom();
 }
@@ -1711,7 +1825,7 @@ async function toggleGmOption(key){
   hideOwnSheet: key==="hideOwnSheet" ? !o.hideOwnSheet : o.hideOwnSheet,
   hideRollDetail: key==="hideRollDetail" ? !o.hideRollDetail : o.hideRollDetail
  };
- localStorage.setItem(KEY,JSON.stringify(db));
+ saveLocalDb();
  if(firebaseReady && roomRef && !applyingRemote){
   roomRef.child("meta/gmOptions").set(db.gmOptions).catch(err=>{ setSyncStatus("동기화 실패"); console.error(err); });
  }
@@ -1763,7 +1877,7 @@ function setActive(id){
  collect();
  db.activeId=id;
  renderedPlayerId=null;
- localStorage.setItem(KEY,JSON.stringify(db));
+ saveLocalDb();
  renderAll();
  if(currentView!=="gm") mode("player");
 }
@@ -1789,7 +1903,7 @@ async function deleteCharacterById(id){
  db.pcs=db.pcs.filter(x=>x.id!==id);
  renderedPlayerId=null;
  db.activeId=(isMine ? (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null) : (db.pcs.find(x=>x.ownerId===PLAYER_ID)?.id || db.pcs[0]?.id || null));
- localStorage.setItem(KEY,JSON.stringify(db));
+ saveLocalDb();
  renderAll();
  if(firebaseReady && roomRef && !applyingRemote){
    const updates={};
@@ -2289,7 +2403,7 @@ function editSessionLogField(field,value){
  if(!item) return;
  item[field]=value;
  item.updatedAt=Date.now();
- try{localStorage.setItem(KEY,JSON.stringify(db));cacheMyRoomSheet();}catch(e){}
+ try{saveLocalDb();cacheMyRoomSheet();}catch(e){}
  // 입력 중에는 편집창 DOM을 다시 만들지 않아 한글 IME와 커서가 끊기지 않게 합니다.
  // 또한 짧게 묶어서 동기화해 글자 하나마다 Firebase 요청이 발생하지 않게 합니다.
  scheduleSessionLogSync();
@@ -2375,14 +2489,173 @@ function addPC(){
  db.pcs.push(p);
  db.activeId=p.id;
  renderedPlayerId=null;
- localStorage.setItem(KEY,JSON.stringify(db));
+ saveLocalDb();
  renderAll();
  if(firebaseReady && roomRef && !applyingRemote) syncPlayerNode(PLAYER_ID);
  mode("player");
 }
 function clearLog(){if(!gmUnlocked){modalAlert("GM 권한이 필요합니다.");return;}db.logs=[];persistQuiet();renderGM();renderSharedLog();}
-function exportData(){collect();let blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tag-and-dice-session.json";a.click();URL.revokeObjectURL(a.href)}
-function importData(){let i=document.createElement("input");i.type="file";i.accept=".json";i.onchange=()=>{let f=i.files[0];if(!f)return;let r=new FileReader();r.onload=async()=>{try{db=JSON.parse(r.result);db.pcs=Array.isArray(db.pcs)?db.pcs:[];db.pcs.forEach(p=>{ensurePCOwner(p);normalizeFamiliar(p)});if(!db.pcs.some(p=>p.ownerId===PLAYER_ID))ensureMyCharacter();db.activeId=db.activeId&&db.pcs.some(p=>p.id===db.activeId)?db.activeId:db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null;db.gmLock=db.gmLock||{enabled:false,pin:""};db.sessionLogs=Array.isArray(db.sessionLogs)?db.sessionLogs:[];db.activeSessionLogId=db.sessionLogs.some(x=>x.id===db.activeSessionLogId)?db.activeSessionLogId:(db.sessionLogs[0]?.id||null);gmUnlocked=false;persist()}catch(e){await modalAlert("파일을 읽을 수 없습니다.")}};r.readAsText(f)};i.click()}
+/* ---------- 저장 파일 이름 ----------
+   파일 이름이 항상 같으면 브라우저가 "이름(1)", "이름(2)"처럼 번호를 붙여
+   저장해서 어느 파일이 언제 것인지 알 수 없습니다. 저장할 때마다
+   저장 시각(년월일-시분초)과 이 브라우저의 누적 저장 번호를 붙입니다.
+     예) 루카_시트_20260901-153012_004.json */
+const SAVE_SEQ_KEY="tagdice_save_seq";
+function nextSaveSeq(){
+ let n=parseInt(localStorage.getItem(SAVE_SEQ_KEY)||"0",10);
+ n=Number.isFinite(n)?n+1:1;
+ try{ localStorage.setItem(SAVE_SEQ_KEY,String(n)); }catch(e){}
+ return n;
+}
+function saveStamp(d){
+ const t=d||new Date(), p=n=>String(n).padStart(2,"0");
+ return `${t.getFullYear()}${p(t.getMonth()+1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}${p(t.getSeconds())}`;
+}
+function safeFileName(s,fallback){
+ // 파일 이름에 쓸 수 없는 문자를 없애고 공백은 _로 바꿉니다.
+ const t=String(s??"").trim().replace(/[\\/:*?"<>|]+/g,"").replace(/\s+/g,"_").slice(0,40);
+ return t||fallback;
+}
+function makeFileName(base,ext){
+ return `${safeFileName(base,"tagdice")}_${saveStamp()}_${String(nextSaveSeq()).padStart(3,"0")}.${ext}`;
+}
+function downloadBlob(blob,filename){
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=filename;
+ a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+/* 방 전체(세션) 저장 */
+function exportData(){
+ collect();
+ const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+ downloadBlob(blob,makeFileName(currentRoom?`태그앤다이스_${currentRoom}`:"태그앤다이스_혼자쓰기","json"));
+}
+
+/* ---------- 캐릭터 시트 1장만 저장 / 주고받기 ----------
+   이 파일을 받은 사람이 "내 캐릭터로 불러오기"를 고르면 소유자가 그 사람으로
+   바뀌어 바로 수정할 수 있습니다. (읽기 전용으로 보기도 선택 가능) */
+function exportCharacter(){
+ collect();
+ const p=current();
+ if(!p){ modalAlert("저장할 캐릭터가 없습니다."); return; }
+ const payload={
+  type:"tagdice-character",
+  version:1,
+  exportedAt:Date.now(),
+  exportedBy:p.ownerNickname||TEMP_LOGIN?.nickname||"게스트",
+  pc:JSON.parse(JSON.stringify(p))
+ };
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+ downloadBlob(blob,makeFileName(`${p.name||"character"}_시트`,"json"));
+}
+
+/* 받은 시트를 내 캐릭터로 만들 때 쓰는 공통 처리.
+   한 계정은 시트를 1장만 가지므로, 쓰던 시트를 대체할지 먼저 확인합니다. */
+async function adoptSheetAsMine(src){
+ const mine=(db.pcs||[]).filter(p=>p.ownerId===PLAYER_ID);
+ const blockers=mine.filter(p=>!sheetIsBlank(p));
+ if(blockers.length){
+  const ok=await modalConfirm(`'${src.name||"이름 없음"}' 시트를 내 캐릭터로 불러올까요?\n지금 쓰던 내 시트 '${blockers[0].name||"이름 없음"}'는 이 시트로 대체됩니다.`);
+  if(!ok) return false;
+ }
+ const removed=mine.map(p=>p.id);
+ db.pcs=(db.pcs||[]).filter(p=>!removed.includes(p.id));
+ const pc=normalizeFamiliar({...blankPC(),...src});
+ pc.id=crypto.randomUUID();
+ pc.ownerId=PLAYER_ID;
+ pc.ownerNickname=TEMP_LOGIN?.nickname||"게스트";
+ db.pcs.push(pc);
+ db.activeId=pc.id;
+ renderedPlayerId=null;
+ return true;
+}
+
+/* 캐릭터 시트 파일(tagdice-character) 불러오기 */
+async function importCharacterPayload(data){
+ if(!isLoggedIn()){ await modalAlert("먼저 로그인해 주세요.\n로그인해야 받은 시트를 내 캐릭터로 가져올 수 있습니다."); return; }
+ const src=data.pc||{};
+ const from=data.exportedBy||src.ownerNickname||"게스트";
+ const mode=await modalChoice(`'${src.name||"이름 없음"}' 캐릭터 시트를 불러옵니다.\n보낸 사람: ${from}`,[
+  {label:"내 캐릭터로 불러오기 (수정 가능)",value:"mine",primary:true},
+  {label:"읽기 전용으로 보기",value:"view"}
+ ]);
+ if(mode===null) return;
+ if(mode==="mine"){
+  if(!await adoptSheetAsMine(src)) return;
+  persist();
+  await modalAlert("이제 이 시트는 내 캐릭터입니다. 바로 수정할 수 있어요.");
+  return;
+ }
+ // 읽기 전용: 소유자를 '받은 시트'로 표시해 두고, 나중에
+ // "🔗 내 캐릭터로 가져오기" 버튼으로 언제든 넘겨받을 수 있게 합니다.
+ const pc=normalizeFamiliar({...blankPC(),...src});
+ pc.id=crypto.randomUUID();
+ pc.ownerId="imported_"+crypto.randomUUID();
+ pc.ownerNickname=`${from} (받은 시트)`;
+ db.pcs.push(pc);
+ db.activeId=pc.id;
+ renderedPlayerId=null;
+ persist();
+ await modalAlert("읽기 전용으로 불러왔습니다.\n수정하려면 '🔗 내 캐릭터로 가져오기' 버튼을 누르세요.");
+}
+
+/* 방 전체(세션) 파일 불러오기 */
+async function importSessionPayload(data){
+ db=data;
+ db.pcs=Array.isArray(db.pcs)?db.pcs:[];
+ db.pcs.forEach(p=>{ensurePCOwner(p);normalizeFamiliar(p)});
+ db.gmLock=db.gmLock||{enabled:false,pin:"",ownerId:""};
+ db.sessionLogs=Array.isArray(db.sessionLogs)?db.sessionLogs:[];
+ db.activeSessionLogId=db.sessionLogs.some(x=>x.id===db.activeSessionLogId)?db.activeSessionLogId:(db.sessionLogs[0]?.id||null);
+ gmUnlocked=false;
+ // 받은 파일 안의 시트는 원래 만든 사람 소유라 그대로면 읽기 전용입니다.
+ // 그중 한 장을 내 캐릭터로 가져올 수 있게 물어봅니다.
+ if(isLoggedIn() && !db.pcs.some(p=>p.ownerId===PLAYER_ID)){
+  const candidates=db.pcs.slice(0,3);
+  if(candidates.length){
+   const pick=await modalChoice("불러온 파일의 시트를 내 캐릭터로 가져올까요?\n가져오면 그 시트를 바로 수정할 수 있습니다.",[
+    ...candidates.map((p,idx)=>({label:`${p.name||"이름 없음"} (${p.ownerNickname||"게스트"})`,value:String(idx),primary:idx===0})),
+    {label:"아니요 (읽기 전용으로 보기)",value:"no"}
+   ]);
+   if(pick!==null && pick!=="no"){
+    const src=candidates[+pick];
+    if(src){
+     db.pcs=db.pcs.filter(p=>p.id!==src.id);
+     await adoptSheetAsMine(src);
+    }
+   }
+  }
+ }
+ if(!db.pcs.some(p=>p.ownerId===PLAYER_ID)) ensureMyCharacter();
+ db.activeId=db.activeId&&db.pcs.some(p=>p.id===db.activeId)?db.activeId:(db.pcs.find(p=>p.ownerId===PLAYER_ID)?.id||db.pcs[0]?.id||null);
+ persist();
+}
+
+function importData(){
+ const i=document.createElement("input");
+ i.type="file"; i.accept=".json";
+ i.onchange=()=>{
+  const f=i.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=async()=>{
+   let data=null;
+   try{ data=JSON.parse(r.result); }catch(e){ await modalAlert("파일을 읽을 수 없습니다."); return; }
+   try{
+    if(data && data.type==="tagdice-character" && data.pc) await importCharacterPayload(data);
+    else if(data && (Array.isArray(data.pcs)||data.activeId!==undefined)) await importSessionPayload(data);
+    else await modalAlert("태그 앤 다이스 저장 파일이 아닙니다.");
+   }catch(e){
+    console.error(e);
+    await modalAlert("파일을 불러오는 중 문제가 발생했습니다: "+e.message);
+   }
+  };
+  r.readAsText(f);
+ };
+ i.click();
+}
 async function exportImage(){
  if(typeof html2canvas==="undefined"){
   await modalAlert('이미지 저장 기능은 인터넷 연결이 필요합니다.\n대신 "인쇄 / PDF 저장" 버튼으로 내보내 보세요.');
@@ -2396,7 +2669,9 @@ async function exportImage(){
  try{
   const canvas=await html2canvas(el,{backgroundColor:"#d5c9ad",scale:2});
   const a=document.createElement("a");
-  a.download=(current().name||"character")+"_tagdice.png";
+  // 저장할 때마다 시각 + 저장 번호가 붙어 파일이 덮이거나 (1),(2)로
+  // 밀리지 않습니다.
+  a.download=makeFileName(`${current()?.name||"character"}_시트`,"png");
   a.href=canvas.toDataURL("image/png");
   a.click();
  }catch(err){
@@ -2409,7 +2684,7 @@ renderAll();
 
 async function bootApp(){
  const roomBtn=document.getElementById("roomCodeBtn");
- if(roomBtn) roomBtn.textContent = currentRoom || "-";
+ if(roomBtn) roomBtn.textContent = currentRoom || "혼자 쓰기";
  applyLoginGate();
  if(!isLoggedIn()){
   // 로그인 전에는 아무것도 묻지 않습니다. 시트를 로컬 미리보기로만
@@ -2422,10 +2697,11 @@ async function bootApp(){
  if(currentRoom){
   joinRoom(currentRoom);
  }else{
-  // 혼자 쓰기 모드에서도 로그인 전에 만들어 둔 시트를 계정에 연결합니다.
-  if(autoClaimMySheets()){ localStorage.setItem(KEY,JSON.stringify(db)); }
+  // 혼자 쓰기 방은 어떤 방과도 데이터를 주고받지 않습니다(오프라인 전용).
+  // 로그인 전에 이 브라우저에서 만들어 둔 시트만 계정에 연결해 줍니다.
+  if(autoClaimMySheets()){ saveLocalDb(); }
   renderAll();
-  setSyncStatus("혼자 쓰기 (방 미접속)");
+  setSyncStatus("혼자 쓰기 방 (방과 완전 분리)");
  }
  setTemporaryLoginUI();
 }
